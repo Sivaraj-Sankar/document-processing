@@ -1,0 +1,25 @@
+prometheus.scrape "ententia_idp" {
+  targets = [
+    {
+      __address__ = "app:8000",
+      job         = "ententia-idp",
+    },
+  ]
+
+  metrics_path = "/metrics"
+  forward_to = [
+    prometheus.remote_write.metrics_hosted_prometheus.receiver,
+  ]
+}
+
+prometheus.remote_write "metrics_hosted_prometheus" {
+  endpoint {
+    name = "hosted-prometheus"
+    url  = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USERNAME")
+      password = sys.env("GRAFANA_CLOUD_PROMETHEUS_PASSWORD")
+    }
+  }
+}

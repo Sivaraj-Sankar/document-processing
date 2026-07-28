@@ -1,0 +1,35 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ententia-idp
+    env_file:
+      - .env
+    environment:
+      AWS_PROFILE: ${ENTENTIA_IDP_AWS_PROFILE_NAME}
+      AWS_DEFAULT_PROFILE: ${ENTENTIA_IDP_AWS_PROFILE_NAME}
+    volumes:
+      - ${HOME}/.aws:/root/.aws:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: grafana-alloy
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+    environment:
+      GRAFANA_CLOUD_PROMETHEUS_URL: ${GRAFANA_CLOUD_PROMETHEUS_URL}
+      GRAFANA_CLOUD_PROMETHEUS_USERNAME: ${GRAFANA_CLOUD_PROMETHEUS_USERNAME}
+      GRAFANA_CLOUD_PROMETHEUS_PASSWORD: ${GRAFANA_CLOUD_PROMETHEUS_PASSWORD}
+    volumes:
+      - ./deploy/alloy/config.alloy:/etc/alloy/config.alloy:ro
+    ports:
+      - "12345:12345"
+    depends_on:
+      - app
+    restart: unless-stopped

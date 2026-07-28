@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DocumentPipeline — ententia-idp</title>
+</head>
+<body>
+<style>
+/* ── tokens ─────────────────────────────────────────── */
+:root {
+  --bg:          #0A1120;
+  --surface:     #111B2E;
+  --node-bg:     #162038;
+  --node-border: #213350;
+  --accent:      #4B9DF5;
+  --accent-dim:  #1B3460;
+  --text:        #B6CCE8;
+  --muted:       #3C5574;
+  --start:       #3EC47A;
+  --end-c:       #E85050;
+  --grid:        rgba(75,157,245,0.042);
+  --edge:        #172E48;
+  --flow:        #4B9DF5;
+  --parallel-bg: rgba(75,157,245,0.03);
+  --parallel-bd: rgba(75,157,245,0.18);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:          #ECF1FA;
+    --surface:     #FFFFFF;
+    --node-bg:     #E3EDF8;
+    --node-border: #9CBBDC;
+    --accent:      #1A5CAA;
+    --accent-dim:  #3E7CC4;
+    --text:        #152440;
+    --muted:       #587898;
+    --start:       #1A7840;
+    --end-c:       #A02828;
+    --grid:        rgba(26,92,170,0.05);
+    --edge:        #BACED8;
+    --flow:        #1A5CAA;
+    --parallel-bg: rgba(26,92,170,0.04);
+    --parallel-bd: rgba(26,92,170,0.2);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:          #0A1120;
+  --surface:     #111B2E;
+  --node-bg:     #162038;
+  --node-border: #213350;
+  --accent:      #4B9DF5;
+  --accent-dim:  #1B3460;
+  --text:        #B6CCE8;
+  --muted:       #3C5574;
+  --start:       #3EC47A;
+  --end-c:       #E85050;
+  --grid:        rgba(75,157,245,0.042);
+  --edge:        #172E48;
+  --flow:        #4B9DF5;
+  --parallel-bg: rgba(75,157,245,0.03);
+  --parallel-bd: rgba(75,157,245,0.18);
+}
+:root[data-theme="light"] {
+  --bg:          #ECF1FA;
+  --surface:     #FFFFFF;
+  --node-bg:     #E3EDF8;
+  --node-border: #9CBBDC;
+  --accent:      #1A5CAA;
+  --accent-dim:  #3E7CC4;
+  --text:        #152440;
+  --muted:       #587898;
+  --start:       #1A7840;
+  --end-c:       #A02828;
+  --grid:        rgba(26,92,170,0.05);
+  --edge:        #BACED8;
+  --flow:        #1A5CAA;
+  --parallel-bg: rgba(26,92,170,0.04);
+  --parallel-bd: rgba(26,92,170,0.2);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+  color: var(--text);
+  font-family: ui-monospace, 'SFMono-Regular', 'Fira Code', 'Cascadia Code', monospace;
+  padding: 2.5rem 2.5rem 4rem;
+  min-height: 100vh;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+header { margin-bottom: 2.5rem; }
+
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 7px;
+}
+
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.015em;
+}
+
+.source-ref {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+/* ── graph ───────────────────────────────────────────── */
+.graph-scroll {
+  overflow-x: auto;
+  margin-bottom: 2.75rem;
+}
+
+svg { display: block; }
+
+.node-rect {
+  fill: var(--node-bg);
+  stroke: var(--node-border);
+  stroke-width: 1.5;
+  cursor: default;
+  transition: stroke 0.15s ease;
+}
+.node-rect:hover { stroke: var(--accent); }
+
+.node-label {
+  fill: var(--text);
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+  font-weight: 500;
+  dominant-baseline: middle;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.node-sub {
+  fill: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 8.5px;
+  dominant-baseline: middle;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.zone-label {
+  fill: var(--accent);
+  font-family: ui-monospace, monospace;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-anchor: middle;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.step-num {
+  fill: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 8px;
+  text-anchor: middle;
+}
+.edge-base {
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  fill: none;
+}
+.edge-flow {
+  stroke: var(--flow);
+  stroke-width: 1.5;
+  fill: none;
+  stroke-dasharray: 5 9;
+  opacity: 0.55;
+}
+.arrowhead {
+  fill: var(--flow);
+  opacity: 0.85;
+}
+.junction {
+  fill: var(--flow);
+  opacity: 0.6;
+}
+.parallel-zone {
+  fill: var(--parallel-bg);
+  stroke: var(--parallel-bd);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.t-start { fill: var(--accent-dim); stroke: var(--start);  stroke-width: 2; }
+.t-end   { fill: var(--accent-dim); stroke: var(--end-c);  stroke-width: 2; }
+.t-start-lbl {
+  fill: var(--start);
+  font-family: ui-monospace, monospace;
+  font-size: 9px; font-weight: 700;
+  dominant-baseline: middle; text-anchor: middle;
+  letter-spacing: 0.06em; pointer-events: none;
+}
+.t-end-lbl {
+  fill: var(--end-c);
+  font-family: ui-monospace, monospace;
+  font-size: 9px; font-weight: 700;
+  dominant-baseline: middle; text-anchor: middle;
+  letter-spacing: 0.06em; pointer-events: none;
+}
+
+/* ── below graph ─────────────────────────────────────── */
+.below {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 0 3.5rem;
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .below { grid-template-columns: 1fr; gap: 2.5rem 0; }
+}
+
+.section-title {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.9rem;
+}
+
+.state-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 16px;
+  font-size: 11px;
+}
+.fkey    { color: var(--accent); }
+.ftype   { color: var(--muted); }
+.freducer {
+  color: var(--muted);
+  font-size: 9.5px;
+  opacity: 0.75;
+}
+.state-divider {
+  grid-column: 1 / -1;
+  border: none;
+  border-top: 1px solid var(--node-border);
+  margin: 4px 0;
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--node-border);
+  border-radius: 5px;
+  padding: 0.75rem 1rem;
+}
+.card-name {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.card-out {
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.card-out .key { color: var(--accent); }
+
+.parallel-note {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--node-border);
+  border-radius: 5px;
+  padding: 0.6rem 0.9rem;
+  line-height: 1.55;
+  margin-bottom: 0.65rem;
+}
+.parallel-note .hi { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .edge-flow { animation: none !important; }
+}
+</style>
+
+<header>
+  <div class="eyebrow">ententia-idp &middot; LangGraph &middot; StateGraph</div>
+  <h1>DocumentPipeline</h1>
+  <div class="source-ref">src/ententia_idp/pipeline.py &middot; _build_graph() :69</div>
+</header>
+
+<div class="graph-scroll">
+  <!--
+    Layout:
+      y-center (classification / START / END) = 142
+
+      START          cx=48   cy=142  r=22   right=70
+      classification x=98    y=116  w=142  h=52   cx=169  right=240
+      fan-out jct    x=288   y=142
+      tagging        x=336   y=26   w=132  h=52   cx=402  cy=52   right=468
+      field_extract  x=336   y=116  w=132  h=52   cx=402  cy=142  right=468
+      summary        x=336   y=206  w=132  h=52   cx=402  cy=232  right=468
+      fan-in jct     x=518   y=142
+      END            cx=622  cy=142  r=22   left=600
+
+    Fan-out paths  (all originate at classification right=240, jct-x=288):
+      →tagging        M240,142 H288 V52  H336
+      →field_extract  M240,142 H336
+      →summary        M240,142 H288 V232 H336
+
+    Fan-in paths  (all terminate at END left=600, jct-x=518):
+      tagging→        M468,52  H518 V142 H600
+      field_extract→  M468,142 H600
+      summary→        M468,232 H518 V142 H600
+  -->
+  <svg viewBox="0 0 720 285" width="720" height="285">
+
+    <!-- parallel zone background -->
+    <rect class="parallel-zone" x="322" y="14" width="158" height="258" rx="7"/>
+    <text class="zone-label" x="401" y="8">parallel</text>
+
+    <!-- ── static edge base tracks ── -->
+    <!-- START → classification -->
+    <line class="edge-base" x1="70" y1="142" x2="91" y2="142"/>
+    <!-- fan-out: classification → tagging -->
+    <path class="edge-base" d="M240,142 H288 V52  H336"/>
+    <!-- fan-out: classification → field_extraction -->
+    <path class="edge-base" d="M240,142 H336"/>
+    <!-- fan-out: classification → summary -->
+    <path class="edge-base" d="M240,142 H288 V232 H336"/>
+    <!-- fan-in: tagging → END -->
+    <path class="edge-base" d="M468,52  H518 V142 H600"/>
+    <!-- fan-in: field_extraction → END -->
+    <path class="edge-base" d="M468,142 H600"/>
+    <!-- fan-in: summary → END -->
+    <path class="edge-base" d="M468,232 H518 V142 H600"/>
+
+    <!-- ── animated flow ── -->
+    <line class="edge-flow" x1="70" y1="142" x2="91" y2="142">
+      <animate attributeName="stroke-dashoffset" from="0" to="-14" dur="0.9s" repeatCount="indefinite"/>
+    </line>
+    <path class="edge-flow" d="M240,142 H288 V52  H336">
+      <animate attributeName="stroke-dashoffset" from="0" to="-14" dur="1.1s" begin="0.15s" repeatCount="indefinite"/>
+    </path>
+    <path class="edge-flow" d="M240,142 H336">
+      <animate attributeName="stroke-dashoffset" from="0" to="-14" dur="1.1s" begin="0.2s"  repeatCount="indefinite"/>
+    </path>
+    <path class="edge-flow" d="M240,142 H288 V232 H336">
+      <animate attributeName="stroke-dashoffset" from="0" to="-14" dur="1.1s" begin="0.25s" repeatCount="indefinite"/>
+    </path>
+    <path class="edge-flow" d="M468,52  H518 V142 H600">
+      <animate attributeName="stroke-dashoffset" from="0" to="-14" dur="1.1s" begin="0.45s" repeatCount="indefinite"/>
+    </path>
+    <path class="edge-flow" d="M468,142 H600">
+      <animate attributeName="stroke-dashoffset" from="0" to="-14" dur="1.1s" begin="0.5s"  repeatCount="indefinite"/>
+    </path>
+    <path class="edge-flow" d="M468,232 H518 V142 H600">
+      <animate attributeName="stroke-dashoffset" from="0" to="-14" dur="1.1s" begin="0.55s" repeatCount="indefinite"/>
+    </path>
+
+    <!-- ── junction dots ── -->
+    <circle class="junction" cx="288" cy="142" r="3.5"/>
+    <circle class="junction" cx="518" cy="142" r="3.5"/>
+
+    <!-- ── arrowheads ── -->
+    <!-- →classification -->
+    <polygon class="arrowhead" points="91,138.5 98,142 91,145.5"/>
+    <!-- →tagging -->
+    <polygon class="arrowhead" points="329,48.5 336,52 329,55.5"/>
+    <!-- →field_extraction -->
+    <polygon class="arrowhead" points="329,138.5 336,142 329,145.5"/>
+    <!-- →summary -->
+    <polygon class="arrowhead" points="329,228.5 336,232 329,235.5"/>
+    <!-- →END (one shared arrowhead at convergence) -->
+    <polygon class="arrowhead" points="593,138.5 600,142 593,145.5"/>
+
+    <!-- ── START terminal ── -->
+    <circle class="t-start" cx="48" cy="142" r="22"/>
+    <text   class="t-start-lbl" x="48" y="142">START</text>
+
+    <!-- ── step labels ── -->
+    <text class="step-num" x="169" y="105">step 1</text>
+    <text class="step-num" x="402" y="18">step 2</text>
+
+    <!-- ── classification node ── -->
+    <rect class="node-rect" x="98" y="116" width="142" height="52" rx="7"/>
+    <text class="node-label" x="169" y="137">classification</text>
+    <text class="node-sub"   x="169" y="155">ClassificationAgent</text>
+
+    <!-- ── parallel nodes ── -->
+    <rect class="node-rect" x="336" y="26"  width="132" height="52" rx="7"/>
+    <text class="node-label" x="402" y="47">tagging</text>
+    <text class="node-sub"   x="402" y="65">TaggingAgent</text>
+
+    <rect class="node-rect" x="336" y="116" width="132" height="52" rx="7"/>
+    <text class="node-label" x="402" y="137">field_extraction</text>
+    <text class="node-sub"   x="402" y="155">FieldExtractionAgent</text>
+
+    <rect class="node-rect" x="336" y="206" width="132" height="52" rx="7"/>
+    <text class="node-label" x="402" y="227">summary</text>
+    <text class="node-sub"   x="402" y="245">SummaryAgent</text>
+
+    <!-- ── END terminal ── -->
+    <circle class="t-end" cx="622" cy="142" r="22"/>
+    <text   class="t-end-lbl" x="622" y="142">END</text>
+
+    <!-- ── footnote ── -->
+    <text class="step-num" x="340" y="276" font-size="8.5">
+      fan-out · 4 nodes · 7 edges · tagging / field_extraction / summary run in parallel
+    </text>
+  </svg>
+</div>
+
+<div class="below">
+  <div>
+    <div class="section-title">PipelineState</div>
+    <div class="state-fields">
+      <span class="fkey">extracted_document</span><span class="ftype">ExtractedDocument</span>
+      <span class="fkey">classification</span>    <span class="ftype">str</span>
+      <span class="fkey">tags</span>              <span class="ftype">list[str]</span>
+      <span class="fkey">extracted_fields</span>  <span class="ftype">dict[str, Any]</span>
+      <span class="fkey">summary</span>           <span class="ftype">str</span>
+      <hr class="state-divider">
+      <span class="fkey">partial</span>
+        <span class="ftype">Annotated[bool, <span class="fkey">or_</span>]</span>
+      <span class="fkey">errors</span>
+        <span class="ftype">Annotated[list[str], <span class="fkey">add</span>]</span>
+      <span class="fkey">agent_metrics</span>
+        <span class="ftype">Annotated[list[dict], <span class="fkey">add</span>]</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-title">Agent state output keys</div>
+    <div class="agent-grid">
+      <div class="parallel-note">
+        After <span class="hi">classification</span> completes, the three parallel branches each
+        write directly to named state fields. Reducer annotations (<span class="hi">operator.add</span>&nbsp;/&nbsp;<span class="hi">operator.or_</span>)
+        merge concurrent writes to <span class="hi">errors</span>, <span class="hi">partial</span>, and <span class="hi">agent_metrics</span>.
+      </div>
+      <div class="agent-card">
+        <div class="card-name">Classification</div>
+        <div class="card-out">→ <span class="key">state["classification"]</span><br>document type label</div>
+      </div>
+      <div class="agent-card">
+        <div class="card-name">Tagging</div>
+        <div class="card-out">→ <span class="key">state["tags"]</span><br>list of category labels</div>
+      </div>
+      <div class="agent-card">
+        <div class="card-name">Field Extraction</div>
+        <div class="card-out">→ <span class="key">state["extracted_fields"]</span><br>structured key-value data</div>
+      </div>
+      <div class="agent-card">
+        <div class="card-name">Summary</div>
+        <div class="card-out">→ <span class="key">state["summary"]</span><br>prose document overview</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Walkthrough — ententia-idp</title>
+<style>
+/* ── Design tokens ─────────────────────────────────── */
+:root {
+  --bg:        #080e1e;
+  --surface:   #0e1a2e;
+  --card:      #111f36;
+  --border:    #1d3050;
+  --border2:   #243a5e;
+  --text:      #c8daf0;
+  --muted:     #4a6a8c;
+  --muted2:    #2e4a6a;
+  --cyan:      #4dd9ff;
+  --cyan-dim:  #0c2d40;
+  --amber:     #f5a623;
+  --amber-dim: #2e1f06;
+  --violet:    #a78bfa;
+  --violet-dim:#1c1440;
+  --green:     #3ec47a;
+  --green-dim: #062418;
+  --red:       #e85050;
+  --red-dim:   #280e0e;
+  --orange:    #fb923c;
+  --orange-dim:#2a1206;
+  --grid:      rgba(77,217,255,0.028);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:        #f0f4fa;
+    --surface:   #ffffff;
+    --card:      #f7fafd;
+    --border:    #c8d8ec;
+    --border2:   #aec4de;
+    --text:      #152440;
+    --muted:     #5a7a9c;
+    --muted2:    #c0d0e0;
+    --cyan:      #0077aa;
+    --cyan-dim:  #dff1fa;
+    --amber:     #b87000;
+    --amber-dim: #fff3d6;
+    --violet:    #6d40cc;
+    --violet-dim:#f0ecff;
+    --green:     #1a7840;
+    --green-dim: #e0f5e8;
+    --red:       #a02828;
+    --red-dim:   #fde8e8;
+    --orange:    #b84000;
+    --orange-dim:#fff0e6;
+    --grid:      rgba(0,119,170,0.04);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#080e1e;--surface:#0e1a2e;--card:#111f36;--border:#1d3050;--border2:#243a5e;
+  --text:#c8daf0;--muted:#4a6a8c;--muted2:#2e4a6a;
+  --cyan:#4dd9ff;--cyan-dim:#0c2d40;--amber:#f5a623;--amber-dim:#2e1f06;
+  --violet:#a78bfa;--violet-dim:#1c1440;--green:#3ec47a;--green-dim:#062418;
+  --red:#e85050;--red-dim:#280e0e;--orange:#fb923c;--orange-dim:#2a1206;
+  --grid:rgba(77,217,255,0.028);
+}
+:root[data-theme="light"] {
+  --bg:#f0f4fa;--surface:#ffffff;--card:#f7fafd;--border:#c8d8ec;--border2:#aec4de;
+  --text:#152440;--muted:#5a7a9c;--muted2:#c0d0e0;
+  --cyan:#0077aa;--cyan-dim:#dff1fa;--amber:#b87000;--amber-dim:#fff3d6;
+  --violet:#6d40cc;--violet-dim:#f0ecff;--green:#1a7840;--green-dim:#e0f5e8;
+  --red:#a02828;--red-dim:#fde8e8;--orange:#b84000;--orange-dim:#fff0e6;
+  --grid:rgba(0,119,170,0.04);
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+  color: var(--text);
+  font-family: ui-monospace,'SFMono-Regular','Fira Code','Cascadia Code',monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  min-height: 100vh;
+}
+
+/* ── Layout shell ──────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+/* ── Top bar ──────────────────────────────────────── */
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  padding: 0.75rem 1.6rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-logo {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.topbar-sep { color: var(--muted2); }
+.topbar-title { font-size: 12px; color: var(--text); }
+.topbar-spacer { flex: 1; }
+.theme-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+}
+.theme-btn:hover { border-color: var(--border2); color: var(--text); }
+
+/* ── Sidebar nav ───────────────────────────────────── */
+.sidenav {
+  grid-column: 1;
+  position: sticky;
+  top: 41px;
+  height: calc(100vh - 41px);
+  overflow-y: auto;
+  padding: 1.6rem 0.8rem 2rem 1.2rem;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+.sidenav-label {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.9rem;
+  padding-left: 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 11px;
+  transition: all 0.12s;
+  margin-bottom: 2px;
+}
+.nav-item:hover { background: var(--card); color: var(--text); }
+.nav-item.active { background: var(--cyan-dim); color: var(--cyan); }
+.nav-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Main content ─────────────────────────────────── */
+.main {
+  grid-column: 2;
+  padding: 2.5rem 2.4rem 6rem;
+  max-width: 960px;
+}
+
+/* ── Page header ──────────────────────────────────── */
+.page-header { margin-bottom: 3.5rem; }
+.page-eyebrow {
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 8px;
+}
+.page-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 10px;
+}
+.page-sub { font-size: 12px; color: var(--muted); max-width: 600px; line-height: 1.7; }
+
+/* ── Stage sections ───────────────────────────────── */
+.stage { margin-bottom: 4.5rem; scroll-margin-top: 56px; }
+
+.stage-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 1.6rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.stage-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.stage-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.stage-source {
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+/* ── Doc mock ─────────────────────────────────────── */
+.doc-mock {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: Georgia,'Times New Roman',serif;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.doc-toolbar {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 14px;
+  font-family: ui-monospace,monospace;
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.doc-toolbar-dot { width: 8px; height: 8px; border-radius: 50%; }
+.doc-body { padding: 2rem 2.2rem; }
+
+.doc-legend {
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.2rem;
+  font-family: ui-monospace,monospace;
+  font-size: 10px;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-swatch {
+  width: 10px; height: 10px; border-radius: 2px;
+  opacity: 0.7;
+}
+
+/* region highlights */
+.doc-text-region  { background: rgba(77,217,255,0.10); border-left: 3px solid var(--cyan);   padding: 0.5rem 0.8rem; margin: 0.5rem 0; border-radius: 0 4px 4px 0; }
+.doc-table-region { background: rgba(245,166,35,0.09); border-left: 3px solid var(--amber);  padding: 0.6rem 0.8rem; margin: 0.5rem 0; border-radius: 0 4px 4px 0; overflow-x: auto; }
+.doc-fig-region   { background: rgba(167,139,250,0.09); border-left: 3px solid var(--violet); padding: 0.6rem 0.8rem; margin: 0.5rem 0; border-radius: 0 4px 4px 0; display: flex; align-items: center; gap: 12px; }
+
+.doc-heading { font-weight: 700; font-size: 15px; color: var(--text); margin-bottom: 2px; font-family: Georgia,serif; }
+.doc-sub { font-size: 11px; color: var(--muted); font-family: ui-monospace,monospace; }
+
+.doc-table { border-collapse: collapse; width: 100%; font-family: ui-monospace,monospace; font-size: 11px; }
+.doc-table th { color: var(--amber); font-weight: 600; padding: 4px 8px; border-bottom: 1px solid var(--amber-dim); text-align: left; }
+.doc-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+.doc-table tr:last-child td { border-bottom: none; }
+
+.fig-icon {
+  width: 44px; height: 44px;
+  background: var(--violet-dim);
+  border: 1px dashed var(--violet);
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.fig-meta { font-family: ui-monospace,monospace; font-size: 10.5px; }
+.fig-id { color: var(--violet); font-weight: 600; }
+.fig-caption { color: var(--muted); }
+
+/* ── Code block / panels ──────────────────────────── */
+.panel-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+@media (max-width: 780px) { .panel-row { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.panel-header {
+  padding: 7px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-body {
+  padding: 0.9rem 1rem;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-height: 340px;
+  overflow-y: auto;
+  line-height: 1.6;
+  tab-size: 2;
+}
+.panel-body.no-scroll { max-height: none; }
+
+.panel-body .k  { color: var(--violet); }
+.panel-body .s  { color: var(--green); }
+.panel-body .n  { color: var(--amber); }
+.panel-body .c  { color: var(--muted); font-style: italic; }
+.panel-body .t  { color: var(--cyan); }
+.panel-body .h  { color: var(--orange); font-weight: 600; }
+
+/* full-width code block */
+.code-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.code-block-header {
+  padding: 7px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.code-block-body {
+  padding: 0.9rem 1rem;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  line-height: 1.6;
+}
+
+/* ── Collapsible ──────────────────────────────────── */
+details { margin-bottom: 0.8rem; }
+summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 7px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "▶"; font-size: 8px; transition: transform 0.15s; }
+details[open] summary::before { transform: rotate(90deg); }
+details[open] summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: none; }
+.details-body {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 0.9rem 1rem;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  line-height: 1.6;
+  background: var(--card);
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+/* ── Agent card ───────────────────────────────────── */
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1.8rem;
+}
+.agent-card-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.agent-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.agent-card-name { font-size: 13px; font-weight: 600; }
+.agent-card-body { padding: 1rem 1.1rem; }
+
+/* ── Metrics strip ─────────────────────────────────── */
+.metrics-strip {
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+}
+.metric { display: flex; flex-direction: column; gap: 1px; }
+.metric-label { color: var(--muted); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; }
+.metric-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── Output highlight ─────────────────────────────── */
+.output-json {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+  font-size: 11.5px;
+  overflow-x: auto;
+  line-height: 1.6;
+  white-space: pre;
+}
+.output-json .jk { color: var(--cyan); }
+.output-json .jv { color: var(--green); }
+.output-json .jn { color: var(--amber); }
+.output-json .jb { color: var(--violet); }
+
+/* ── Final response ─────────────────────────────────── */
+.response-block {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.response-block-header {
+  padding: 9px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.response-block-body {
+  padding: 1rem 1.1rem;
+  font-size: 11.5px;
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.7;
+}
+
+/* ── Callout ──────────────────────────────────────── */
+.callout {
+  background: var(--card);
+  border-left: 3px solid var(--cyan);
+  border-radius: 0 6px 6px 0;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.2rem;
+  font-size: 11.5px;
+  color: var(--text);
+  line-height: 1.6;
+}
+.callout.amber  { border-left-color: var(--amber); }
+.callout.violet { border-left-color: var(--violet); }
+.callout.green  { border-left-color: var(--green); }
+
+/* ── Flow arrow between stages ─────────────────────── */
+.stage-connector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted2);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  margin: -2rem 0 2.5rem 0;
+  padding-left: 4px;
+}
+.stage-connector::before {
+  content: "";
+  width: 1px;
+  height: 28px;
+  background: linear-gradient(to bottom, var(--border), var(--border2));
+  display: block;
+  margin-left: 12px;
+}
+
+/* ── Util ─────────────────────────────────────────── */
+.badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+.color-cyan   { color: var(--cyan); }
+.color-amber  { color: var(--amber); }
+.color-violet { color: var(--violet); }
+.color-green  { color: var(--green); }
+.color-orange { color: var(--orange); }
+.color-red    { color: var(--red); }
+.color-muted  { color: var(--muted); }
+
+/* narrow helpers */
+details summary { list-style: none; }
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────── -->
+<div class="topbar">
+  <span class="topbar-logo">ententia-idp</span>
+  <span class="topbar-sep">/</span>
+  <span class="topbar-title">Pipeline Walkthrough</span>
+  <span class="topbar-spacer"></span>
+  <button class="theme-btn" onclick="toggleTheme()">Toggle theme</button>
+</div>
+
+<div class="shell">
+
+<!-- ── Sidebar ─────────────────────────────────────── -->
+<nav class="sidenav">
+  <div class="sidenav-label">Stages</div>
+  <a class="nav-item" href="#stage-doc">
+    <span class="nav-dot" style="background:var(--cyan)"></span>
+    Source document
+  </a>
+  <a class="nav-item" href="#stage-extract">
+    <span class="nav-dot" style="background:var(--amber)"></span>
+    Extraction
+  </a>
+  <a class="nav-item" href="#stage-serialize">
+    <span class="nav-dot" style="background:var(--orange)"></span>
+    serialize_document()
+  </a>
+  <a class="nav-item" href="#stage-classify">
+    <span class="nav-dot" style="background:var(--violet)"></span>
+    ClassificationAgent
+  </a>
+  <a class="nav-item" href="#stage-parallel">
+    <span class="nav-dot" style="background:var(--green)"></span>
+    Parallel agents
+  </a>
+  <a class="nav-item" href="#stage-response">
+    <span class="nav-dot" style="background:var(--red)"></span>
+    Final response
+  </a>
+  <div class="sidenav-label" style="margin-top:1.8rem;">Resources</div>
+  <a class="nav-item" href="pipeline-graph.html" target="_blank">
+    <span class="nav-dot" style="background:var(--border2)"></span>
+    Pipeline graph →
+  </a>
+</nav>
+
+<!-- ── Main ────────────────────────────────────────── -->
+<main class="main">
+
+<div class="page-header">
+  <div class="page-eyebrow">ententia-idp &middot; LangGraph &middot; Fan-out pipeline</div>
+  <h1 class="page-title">Pipeline Walkthrough</h1>
+  <p class="page-sub">Traces a sample DOCX through every stage — from raw file to structured JSON response — showing exactly what each component receives and produces.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────────── -->
+<!-- STAGE 1 — Source document                           -->
+<!-- ─────────────────────────────────────────────────── -->
+<section class="stage" id="stage-doc">
+  <div class="stage-header">
+    <span class="stage-badge" style="background:var(--cyan-dim);color:var(--cyan);">1</span>
+    <span class="stage-name">Source document</span>
+    <span class="stage-source">POST /process_document (multipart/form-data)</span>
+  </div>
+
+  <div class="callout">
+    The API receives a DOCX upload. DOCX is the richest format — it yields <strong class="color-cyan">text paragraphs</strong>, <strong class="color-amber">tables</strong>, and <strong class="color-violet">figure references</strong> all in one file. PDF extraction only produces text and figure metadata (tables are always empty <code>[]</code>).
+  </div>
+
+  <!-- legend -->
+  <div class="doc-legend">
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--cyan)"></div><span class="color-muted">Text paragraphs</span></div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--amber)"></div><span class="color-muted">Table (markdown + CSV)</span></div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--violet)"></div><span class="color-muted">Figure reference</span></div>
+  </div>
+
+  <!-- Document mock -->
+  <div class="doc-mock">
+    <div class="doc-toolbar">
+      <div class="doc-toolbar-dot" style="background:#e85050"></div>
+      <div class="doc-toolbar-dot" style="background:#f5a623"></div>
+      <div class="doc-toolbar-dot" style="background:#3ec47a"></div>
+      <span style="margin-left:6px;">sow-cloud-migration-2024.docx</span>
+      <span style="margin-left:auto;color:var(--muted2)">4 pages · 3 content regions</span>
+    </div>
+    <div class="doc-body">
+
+      <!-- Figure region — company logo top of page -->
+      <div class="doc-fig-region">
+        <div class="fig-icon">🏢</div>
+        <div class="fig-meta">
+          <div class="fig-id">fig_1 &nbsp;·&nbsp; page 1</div>
+          <div class="fig-caption">TechBuild Solutions Ltd. company logo (PNG embedded in document header)</div>
+        </div>
+      </div>
+
+      <!-- Text region — page 1 -->
+      <div class="doc-text-region">
+        <div class="doc-heading">STATEMENT OF WORK</div>
+        <div class="doc-sub" style="margin-bottom:0.6rem;">SOW-2024-0047 &nbsp;·&nbsp; Version 1.2 &nbsp;·&nbsp; Effective 2024-01-15</div>
+        <div style="margin-bottom:0.4rem;"><strong>Project:</strong> Cloud Migration Platform</div>
+        <div style="margin-bottom:0.4rem;"><strong>Client:</strong> Acme Financial Services Ltd. &nbsp;·&nbsp; ABN 48 123 456 789</div>
+        <div style="margin-bottom:0.4rem;"><strong>Vendor:</strong> TechBuild Solutions Ltd. &nbsp;·&nbsp; ABN 71 987 654 321</div>
+        <div style="margin-bottom:0.4rem;"><strong>Start date:</strong> 2024-02-01 &nbsp;&nbsp; <strong>End date:</strong> 2024-09-30</div>
+        <div style="margin-bottom:0.4rem;"><strong>Total budget:</strong> $120,000 AUD (ex. GST)</div>
+      </div>
+
+      <!-- Text region — page 2 scope -->
+      <div class="doc-text-region">
+        <strong>Scope of Work</strong><br>
+        TechBuild will migrate 40 on-premises workloads to AWS (us-east-1) for Acme Financial Services. The engagement covers architecture assessment, workload lift-and-shift, post-migration cost optimisation, and a full handover package including runbooks and 30-day hypercare support.<br><br>
+        <strong>Payment terms:</strong> Milestone-based. Each invoice is issued on completion of the milestone deliverable and is due Net 30.<br><br>
+        <strong>Key contacts:</strong><br>
+        · Sarah Chen — Project Sponsor (Acme) &nbsp;·&nbsp; sarah.chen@acme-fin.com<br>
+        · James Okafor — Delivery Lead (TechBuild) &nbsp;·&nbsp; j.okafor@techbuild.io
+      </div>
+
+      <!-- Table region — milestones -->
+      <div class="doc-table-region">
+        <div style="font-family:ui-monospace,monospace;font-size:10px;color:var(--amber);margin-bottom:6px;font-weight:600;">TABLE — Milestone Schedule (page 2)</div>
+        <table class="doc-table">
+          <thead>
+            <tr>
+              <th>Milestone</th>
+              <th>Deliverable</th>
+              <th>Amount (AUD)</th>
+              <th>Due Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>M1 — Discovery</td><td>Architecture review + gap analysis</td><td>$24,000</td><td>2024-03-31</td></tr>
+            <tr><td>M2 — Lift &amp; Shift</td><td>40 workloads migrated to AWS us-east-1</td><td>$48,000</td><td>2024-06-30</td></tr>
+            <tr><td>M3 — Optimise</td><td>Cost tagging, FinOps dashboard, auto-scaling</td><td>$32,000</td><td>2024-08-31</td></tr>
+            <tr><td>M4 — Handover</td><td>Runbooks, training, 30-day hypercare</td><td>$16,000</td><td>2024-09-30</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<!-- STAGE 2 — Extraction                                -->
+<!-- ─────────────────────────────────────────────────── -->
+<section class="stage" id="stage-extract">
+  <div class="stage-header">
+    <span class="stage-badge" style="background:var(--amber-dim);color:var(--amber);">2</span>
+    <span class="stage-name">Extraction</span>
+    <span class="stage-source">src/ententia_idp/extractor.py · _extract_docx()</span>
+  </div>
+
+  <div class="callout amber">
+    <code>DocumentExtractor.extract()</code> detects <code>.docx</code> and runs <code>_extract_docx()</code>. It walks paragraphs for text, converts each <code>Table</code> object to both markdown and CSV, and inspects <code>document.part._rels</code> for embedded image relationships.
+  </div>
+
+  <div class="panel-row">
+    <div class="panel">
+      <div class="panel-header" style="color:var(--amber)">
+        <span>ExtractedDocument</span>
+        <span style="color:var(--muted);margin-left:auto;">models.py</span>
+      </div>
+      <div class="panel-body no-scroll"><span class="k">class</span> <span class="t">ExtractedDocument</span>(<span class="n">BaseModel</span>):
+  metadata: <span class="n">DocumentMetadata</span>
+  pages:    <span class="n">List</span>[<span class="t">ExtractedPage</span>]
+  tables:   <span class="n">List</span>[<span class="t">ExtractedTable</span>]
+  figures:  <span class="n">List</span>[<span class="t">ExtractedFigure</span>]
+
+<span class="k">class</span> <span class="t">DocumentMetadata</span>(<span class="n">BaseModel</span>):
+  source_file_name: <span class="n">str</span>
+  file_type:        <span class="n">str</span>  <span class="c"># "docx"</span>
+  total_pages:      <span class="n">int</span>
+
+<span class="k">class</span> <span class="t">ExtractedTable</span>(<span class="n">BaseModel</span>):
+  page:     <span class="n">int</span>
+  markdown: <span class="n">str</span>  <span class="c"># pipe-delimited table</span>
+  csv:      <span class="n">str</span>
+
+<span class="k">class</span> <span class="t">ExtractedFigure</span>(<span class="n">BaseModel</span>):
+  fig_id:  <span class="n">str</span>
+  page:    <span class="n">int</span>
+  caption: <span class="n">Optional</span>[<span class="n">str</span>]</div>
+    </div>
+    <div class="panel">
+      <div class="panel-header" style="color:var(--amber)">
+        <span>Populated instance</span>
+        <span style="color:var(--muted);margin-left:auto;">after _extract_docx()</span>
+      </div>
+      <div class="panel-body"><span class="k">metadata</span>:
+  source_file_name: <span class="s">"sow-cloud-migration-2024.docx"</span>
+  file_type:        <span class="s">"docx"</span>
+  total_pages:      <span class="n">4</span>
+
+<span class="k">pages</span>: [
+  ExtractedPage(page_number=<span class="n">1</span>, text=<span class="s">"STATEMENT OF WORK\n
+SOW-2024-0047 ..."</span>),
+  ExtractedPage(page_number=<span class="n">2</span>, text=<span class="s">"Scope of Work\nTechBuild will migrate ..."</span>),
+  ExtractedPage(page_number=<span class="n">3</span>, text=<span class="s">"Payment terms: ..."</span>),
+  ExtractedPage(page_number=<span class="n">4</span>, text=<span class="s">"Signatures ..."</span>),
+]
+
+<span class="k">tables</span>: [
+  ExtractedTable(
+    page=<span class="n">2</span>,
+    markdown=<span class="s">"| Milestone | Deliverable | Amount | Due Date |\n|---|..."</span>,
+    csv=<span class="s">"Milestone,Deliverable,Amount,Due Date\n..."</span>,
+  )
+]
+
+<span class="k">figures</span>: [
+  ExtractedFigure(
+    fig_id=<span class="s">"fig_1"</span>,
+    page=<span class="n">1</span>,
+    caption=<span class="s">"TechBuild Solutions Ltd. company logo"</span>,
+  )
+]</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Note — PDF vs DOCX:</strong> if this were a PDF, <code>tables</code> would always be <code>[]</code> because <code>_extract_pdf()</code> uses <code>page.get_text("text")</code> and <code>page.get_images()</code> — it has no table extraction path. DOCX is the format that exercises all three content types.
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<!-- STAGE 3 — serialize_document()                      -->
+<!-- ─────────────────────────────────────────────────── -->
+<section class="stage" id="stage-serialize">
+  <div class="stage-header">
+    <span class="stage-badge" style="background:var(--orange-dim);color:var(--orange);">3</span>
+    <span class="stage-name">serialize_document()</span>
+    <span class="stage-source">src/ententia_idp/llm.py · serialize_document()</span>
+  </div>
+
+  <div class="callout" style="border-left-color:var(--orange)">
+    Every agent — including all three parallel agents — calls <code>serialize_document(doc)</code> independently at runtime. They each receive the same string from the same <code>ExtractedDocument</code>. This is the <strong>exact text</strong> appended to every agent's user message before it is sent to Bedrock.
+  </div>
+
+  <div class="code-block">
+    <div class="code-block-header" style="color:var(--orange);">
+      <span>serialize_document() — source</span>
+      <span style="color:var(--muted);margin-left:auto;">llm.py:serialize_document</span>
+    </div>
+    <div class="code-block-body"><span class="k">def</span> <span class="t">serialize_document</span>(doc: <span class="n">ExtractedDocument</span>) -> <span class="n">str</span>:
+    parts = [
+        <span class="s">f"File: {doc.metadata.source_file_name}  |  Type: {doc.metadata.file_type}  |  Pages: {doc.metadata.total_pages}"</span>
+    ]
+    <span class="k">for</span> page <span class="k">in</span> doc.pages:
+        <span class="k">if</span> page.text.strip():
+            parts.append(<span class="s">f"--- PAGE {page.page_number} ---\n{page.text.strip()}"</span>)
+    <span class="k">for</span> table <span class="k">in</span> doc.tables:
+        parts.append(<span class="s">f"--- TABLE (page {table.page}) ---\n{table.markdown}"</span>)
+    <span class="k">if</span> doc.figures:
+        fig_lines = [
+            <span class="s">f"  • {f.fig_id} on page {f.page}"</span> + (<span class="s">f": {f.caption}"</span> <span class="k">if</span> f.caption <span class="k">else</span> <span class="s">""</span>)
+            <span class="k">for</span> f <span class="k">in</span> doc.figures
+        ]
+        parts.append(<span class="s">"--- FIGURES ---\n"</span> + <span class="s">"\n"</span>.join(fig_lines))
+    <span class="k">return</span> <span class="s">"\n\n"</span>.join(parts)</div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-block-header" style="color:var(--orange);">
+      <span>Resulting string — passed verbatim in every agent's user message</span>
+    </div>
+    <div class="code-block-body" style="color:var(--green);"><span style="color:var(--muted)">──────────── start of serialized document ────────────</span>
+
+File: sow-cloud-migration-2024.docx  |  Type: docx  |  Pages: 4
+
+--- PAGE 1 ---
+STATEMENT OF WORK
+SOW-2024-0047  ·  Version 1.2  ·  Effective 2024-01-15
+
+Project: Cloud Migration Platform
+Client:  Acme Financial Services Ltd.  ·  ABN 48 123 456 789
+Vendor:  TechBuild Solutions Ltd.      ·  ABN 71 987 654 321
+Start date: 2024-02-01    End date: 2024-09-30
+Total budget: $120,000 AUD (ex. GST)
+
+--- PAGE 2 ---
+Scope of Work
+TechBuild will migrate 40 on-premises workloads to AWS (us-east-1) for
+Acme Financial Services. The engagement covers architecture assessment,
+workload lift-and-shift, post-migration cost optimisation, and a full
+handover package including runbooks and 30-day hypercare support.
+
+--- PAGE 3 ---
+Payment terms: Milestone-based. Each invoice is issued on completion of
+the milestone deliverable and is due Net 30.
+
+Key contacts:
+· Sarah Chen — Project Sponsor (Acme)      sarah.chen@acme-fin.com
+· James Okafor — Delivery Lead (TechBuild) j.okafor@techbuild.io
+
+--- PAGE 4 ---
+Signatures
+Client representative: ________________  Date: __________
+Vendor representative: ________________  Date: __________
+
+--- TABLE (page 2) ---
+| Milestone       | Deliverable                                    | Amount   | Due Date   |
+|-----------------|------------------------------------------------|----------|------------|
+| M1 — Discovery  | Architecture review + gap analysis             | $24,000  | 2024-03-31 |
+| M2 — Lift&Shift | 40 workloads migrated to AWS us-east-1         | $48,000  | 2024-06-30 |
+| M3 — Optimise   | Cost tagging, FinOps dashboard, auto-scaling   | $32,000  | 2024-08-31 |
+| M4 — Handover   | Runbooks, training, 30-day hypercare           | $16,000  | 2024-09-30 |
+
+--- FIGURES ---
+  • fig_1 on page 1: TechBuild Solutions Ltd. company logo
+
+<span style="color:var(--muted)">───────────── end of serialized document ─────────────</span></div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<!-- STAGE 4 — ClassificationAgent                        -->
+<!-- ─────────────────────────────────────────────────── -->
+<section class="stage" id="stage-classify">
+  <div class="stage-header">
+    <span class="stage-badge" style="background:var(--violet-dim);color:var(--violet);">4</span>
+    <span class="stage-name">ClassificationAgent</span>
+    <span class="stage-source">agents.py · ClassificationAgent · max_tokens=128</span>
+  </div>
+
+  <div class="callout" style="border-left-color:var(--violet)">
+    Runs first, sequentially. Its output (<code>"Statement of Work"</code>) is written to <code>PipelineState.classification</code> and is available to all three parallel agents via their <code>context</code> argument.
+  </div>
+
+  <div class="agent-card">
+    <div class="agent-card-header">
+      <span class="agent-tag" style="background:var(--violet-dim);color:var(--violet);">step 1</span>
+      <span class="agent-card-name" style="color:var(--violet);">ClassificationAgent</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:auto;">tool: classify_document</span>
+    </div>
+    <div class="agent-card-body">
+
+      <div class="panel-row">
+        <div class="panel">
+          <div class="panel-header" style="color:var(--muted);">
+            System prompt
+          </div>
+          <div class="panel-body"><span style="color:var(--text);">You are a document classification specialist.
+Analyse the document content and identify its type.
+
+Definitions:
+- Invoice: a bill or payment request listing line
+  items and amounts due
+- Support Ticket: an IT/customer incident record with
+  a ticket ID, priority, and resolution
+- Statement of Work: a project contract specifying
+  scope, milestones, deliverables, and payment schedule
+- Vendor Contract: a legal services agreement covering
+  terms, renewal, and liability between parties
+- UNKNOWN: does not clearly match any of the above</span></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header" style="color:var(--muted);">
+            User message
+          </div>
+          <div class="panel-body"><span style="color:var(--muted);">Classify this document:</span>
+
+<span style="color:var(--orange);">[serialized document — see stage 3]</span>
+<span style="color:var(--muted);font-size:10px;">↳ File: sow-cloud-migration-2024.docx  |  Type: docx  |  Pages: 4
+   --- PAGE 1 --- ... (full text)
+   --- TABLE (page 2) --- ...
+   --- FIGURES --- ...</span></div>
+        </div>
+      </div>
+
+      <details>
+        <summary>Tool schema — classify_document</summary>
+        <div class="details-body"><span class="k">"name"</span>: <span class="s">"classify_document"</span>,
+<span class="k">"description"</span>: <span class="s">"Classify the document type based on its content."</span>,
+<span class="k">"input_schema"</span>: {
+  <span class="k">"type"</span>: <span class="s">"object"</span>,
+  <span class="k">"properties"</span>: {
+    <span class="k">"classification"</span>: {
+      <span class="k">"type"</span>: <span class="s">"string"</span>,
+      <span class="k">"enum"</span>: [
+        <span class="s">"Invoice"</span>,
+        <span class="s">"Support Ticket"</span>,
+        <span class="s">"Statement of Work"</span>,
+        <span class="s">"Vendor Contract"</span>,
+        <span class="s">"UNKNOWN"</span>
+      ],
+      <span class="k">"description"</span>: <span class="s">"The document type."</span>
+    }
+  },
+  <span class="k">"required"</span>: [<span class="s">"classification"</span>]
+}
+
+<span class="c"># Bedrock call uses tool_choice={"type":"tool","name":"classify_document"}
+# — forces the model to call this exact tool instead of generating text</span></div>
+      </details>
+
+      <div style="margin-top:0.9rem;">
+        <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Tool call response (tool_input)</div>
+        <div class="output-json">{
+  <span class="jk">"classification"</span>: <span class="jv">"Statement of Work"</span>
+}</div>
+      </div>
+
+      <div style="margin-top:0.9rem;">
+        <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">State update written</div>
+        <div class="output-json">{
+  <span class="jk">"classification"</span>: <span class="jv">"Statement of Work"</span>,
+  <span class="jk">"agent_metrics"</span>: [{ <span class="jk">"agent"</span>: <span class="jv">"ClassificationAgent"</span>, <span class="jk">"input_tokens"</span>: <span class="jn">812</span>, <span class="jk">"output_tokens"</span>: <span class="jn">12</span>, <span class="jk">"cost_usd"</span>: <span class="jn">0.000148</span> }],
+  <span class="jk">"partial"</span>: <span class="jb">false</span>,
+  <span class="jk">"errors"</span>: []
+}</div>
+      </div>
+
+    </div>
+    <div class="metrics-strip">
+      <div class="metric"><span class="metric-label">Input tokens</span><span class="metric-value color-cyan">812</span></div>
+      <div class="metric"><span class="metric-label">Output tokens</span><span class="metric-value color-cyan">12</span></div>
+      <div class="metric"><span class="metric-label">Max tokens</span><span class="metric-value color-muted">128</span></div>
+      <div class="metric"><span class="metric-label">Cost (est.)</span><span class="metric-value color-amber">$0.000148</span></div>
+      <div class="metric"><span class="metric-label">Output field</span><span class="metric-value color-violet">classification</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<!-- STAGE 5 — Parallel agents                           -->
+<!-- ─────────────────────────────────────────────────── -->
+<section class="stage" id="stage-parallel">
+  <div class="stage-header">
+    <span class="stage-badge" style="background:var(--green-dim);color:var(--green);">5</span>
+    <span class="stage-name">Parallel agents</span>
+    <span class="stage-source">agents.py · TaggingAgent, FieldExtractionAgent, SummaryAgent</span>
+  </div>
+
+  <div class="callout" style="border-left-color:var(--green)">
+    LangGraph fans out from <code>classification</code> to three nodes simultaneously. Each node calls <code>_run_agent_node()</code>, which builds a fresh <code>context</code> dict from the current state and calls <code>serialize_document(doc)</code> independently. The <code>Annotated[list, operator.add]</code> reducers on <code>errors</code> and <code>agent_metrics</code> safely merge concurrent writes without conflict.
+  </div>
+
+  <!-- Context dict passed to all parallel agents -->
+  <div class="code-block" style="margin-bottom:1.4rem;">
+    <div class="code-block-header" style="color:var(--green);">
+      <span>context dict passed to every parallel agent</span>
+      <span style="color:var(--muted);margin-left:auto;">pipeline.py · _run_agent_node()</span>
+    </div>
+    <div class="code-block-body"><span class="c"># built inside _run_agent_node() before calling agent.run()</span>
+context = {
+    <span class="s">"classification"</span>: state[<span class="s">"classification"</span>],   <span class="c"># ← "Statement of Work" from step 4</span>
+    <span class="s">"tags"</span>:           state[<span class="s">"tags"</span>],              <span class="c"># ← [] (parallel, not yet written)</span>
+    <span class="s">"extracted_fields"</span>: state[<span class="s">"extracted_fields"</span>], <span class="c"># ← {} (parallel, not yet written)</span>
+    <span class="s">"summary"</span>:        state[<span class="s">"summary"</span>],           <span class="c"># ← "" (parallel, not yet written)</span>
+}
+<span class="c"># Each agent only READS context["classification"]; it does not use the others</span></div>
+  </div>
+
+  <!-- ── TaggingAgent ── -->
+  <div class="agent-card" style="border-color:var(--cyan-dim);">
+    <div class="agent-card-header">
+      <span class="agent-tag" style="background:var(--cyan-dim);color:var(--cyan);">parallel A</span>
+      <span class="agent-card-name" style="color:var(--cyan);">TaggingAgent</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:auto;">tool: tag_document · max_tokens=256</span>
+    </div>
+    <div class="agent-card-body">
+
+      <div class="panel-row">
+        <div class="panel">
+          <div class="panel-header" style="color:var(--muted);">System prompt</div>
+          <div class="panel-body"><span style="color:var(--text);">You are a document tagging specialist.
+Generate 3–7 lowercase hyphen-separated semantic tags
+that reflect the document's main themes, industry, and
+key attributes. Tags must be grounded in the document
+content.
+
+Examples by document type:
+- Invoice: milestone-payment, net-30, gst, change-order, b2b
+- Support Ticket: p1, production-down, ldap, erp, resolved
+- Statement of Work: milestone-based, ocr, ai, fintech
+- Vendor Contract: saas, cloud-infrastructure, auto-renewal</span></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header" style="color:var(--muted);">User message</div>
+          <div class="panel-body"><span style="color:var(--muted);">Document type: <span style="color:var(--cyan);">Statement of Work</span>
+
+Generate tags for this document:
+
+</span><span style="color:var(--orange);">[serialized document — same string as stage 3]</span></div>
+        </div>
+      </div>
+
+      <details>
+        <summary>Tool schema — tag_document</summary>
+        <div class="details-body"><span class="k">"name"</span>: <span class="s">"tag_document"</span>,
+<span class="k">"input_schema"</span>: {
+  <span class="k">"type"</span>: <span class="s">"object"</span>,
+  <span class="k">"properties"</span>: {
+    <span class="k">"tags"</span>: {
+      <span class="k">"type"</span>: <span class="s">"array"</span>,
+      <span class="k">"items"</span>: { <span class="k">"type"</span>: <span class="s">"string"</span> },
+      <span class="k">"description"</span>: <span class="s">"3–7 lowercase hyphen-separated semantic tags."</span>,
+      <span class="k">"minItems"</span>: <span class="n">3</span>,
+      <span class="k">"maxItems"</span>: <span class="n">7</span>
+    }
+  },
+  <span class="k">"required"</span>: [<span class="s">"tags"</span>]
+}</div>
+      </details>
+
+      <div style="margin-top:0.9rem;">
+        <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Tool call response → state update</div>
+        <div class="output-json">{
+  <span class="jk">"tags"</span>: [
+    <span class="jv">"milestone-based"</span>,
+    <span class="jv">"cloud-migration"</span>,
+    <span class="jv">"aws"</span>,
+    <span class="jv">"fintech"</span>,
+    <span class="jv">"multi-phase"</span>,
+    <span class="jv">"infrastructure"</span>
+  ],
+  <span class="jk">"agent_metrics"</span>: [{ <span class="jk">"agent"</span>: <span class="jv">"TaggingAgent"</span>, <span class="jk">"input_tokens"</span>: <span class="jn">874</span>, <span class="jk">"output_tokens"</span>: <span class="jn">28</span>, <span class="jk">"cost_usd"</span>: <span class="jn">0.000163</span> }],
+  <span class="jk">"partial"</span>: <span class="jb">false</span>
+}</div>
+      </div>
+    </div>
+    <div class="metrics-strip">
+      <div class="metric"><span class="metric-label">Input tokens</span><span class="metric-value color-cyan">874</span></div>
+      <div class="metric"><span class="metric-label">Output tokens</span><span class="metric-value color-cyan">28</span></div>
+      <div class="metric"><span class="metric-label">Cost (est.)</span><span class="metric-value color-amber">$0.000163</span></div>
+      <div class="metric"><span class="metric-label">Output field</span><span class="metric-value color-cyan">tags</span></div>
+      <div class="metric"><span class="metric-label">Reducer</span><span class="metric-value color-muted">direct write</span></div>
+    </div>
+  </div>
+
+  <!-- ── FieldExtractionAgent ── -->
+  <div class="agent-card" style="border-color:var(--amber-dim);">
+    <div class="agent-card-header">
+      <span class="agent-tag" style="background:var(--amber-dim);color:var(--amber);">parallel B</span>
+      <span class="agent-card-name" style="color:var(--amber);">FieldExtractionAgent</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:auto;">tool: extract_fields · max_tokens=4096</span>
+    </div>
+    <div class="agent-card-body">
+
+      <div class="panel-row">
+        <div class="panel">
+          <div class="panel-header" style="color:var(--muted);">System prompt (excerpt)</div>
+          <div class="panel-body"><span style="color:var(--text);">You are a document field extraction specialist.
+Extract ALL key business fields found in the document.
+Use snake_case keys.
+Do NOT apply a fixed field list — extract whatever
+is actually present.
+
+Field guidance (Statement of Work):
+  project_name, sow_number, client, vendor,
+  start_date, end_date, total_budget,
+  deliverables (array),
+  milestones (array — each with name, amount, due_date),
+  key_contacts (array — each with name, role, email)
+
+Omit fields absent from the document.</span></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header" style="color:var(--muted);">User message</div>
+          <div class="panel-body"><span style="color:var(--muted);">Document type: <span style="color:var(--amber);">Statement of Work</span>
+
+Extract all key business fields from
+this document:
+
+</span><span style="color:var(--orange);">[serialized document — same string as stage 3]</span></div>
+        </div>
+      </div>
+
+      <details>
+        <summary>Tool schema — extract_fields</summary>
+        <div class="details-body"><span class="k">"name"</span>: <span class="s">"extract_fields"</span>,
+<span class="k">"input_schema"</span>: {
+  <span class="k">"type"</span>: <span class="s">"object"</span>,
+  <span class="k">"properties"</span>: {
+    <span class="k">"fields"</span>: {
+      <span class="k">"type"</span>: <span class="s">"object"</span>,
+      <span class="k">"description"</span>: <span class="s">"All key business fields for this specific document type.
+Use snake_case keys. Values may be strings, numbers, or arrays.
+Extract every field present — do not use a fixed schema or omit anything."</span>,
+      <span class="k">"additionalProperties"</span>: <span class="n">true</span>   <span class="c"># open schema — no fixed properties list</span>
+    }
+  },
+  <span class="k">"required"</span>: [<span class="s">"fields"</span>]
+}</div>
+      </details>
+
+      <div style="margin-top:0.9rem;">
+        <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Tool call response → state update</div>
+        <div class="output-json">{
+  <span class="jk">"extracted_fields"</span>: {
+    <span class="jk">"project_name"</span>:  <span class="jv">"Cloud Migration Platform"</span>,
+    <span class="jk">"sow_number"</span>:    <span class="jv">"SOW-2024-0047"</span>,
+    <span class="jk">"version"</span>:       <span class="jv">"1.2"</span>,
+    <span class="jk">"effective_date"</span>: <span class="jv">"2024-01-15"</span>,
+    <span class="jk">"client"</span>:         <span class="jv">"Acme Financial Services Ltd."</span>,
+    <span class="jk">"vendor"</span>:         <span class="jv">"TechBuild Solutions Ltd."</span>,
+    <span class="jk">"start_date"</span>:     <span class="jv">"2024-02-01"</span>,
+    <span class="jk">"end_date"</span>:       <span class="jv">"2024-09-30"</span>,
+    <span class="jk">"total_budget"</span>:   <span class="jn">120000</span>,
+    <span class="jk">"currency"</span>:       <span class="jv">"AUD"</span>,
+    <span class="jk">"payment_terms"</span>:  <span class="jv">"Milestone-based, Net 30"</span>,
+    <span class="jk">"workloads_count"</span>: <span class="jn">40</span>,
+    <span class="jk">"cloud_provider"</span>: <span class="jv">"AWS"</span>,
+    <span class="jk">"aws_region"</span>:     <span class="jv">"us-east-1"</span>,
+    <span class="jk">"milestones"</span>: [
+      { <span class="jk">"name"</span>: <span class="jv">"M1 — Discovery"</span>,  <span class="jk">"amount"</span>: <span class="jn">24000</span>, <span class="jk">"due_date"</span>: <span class="jv">"2024-03-31"</span> },
+      { <span class="jk">"name"</span>: <span class="jv">"M2 — Lift & Shift"</span>, <span class="jk">"amount"</span>: <span class="jn">48000</span>, <span class="jk">"due_date"</span>: <span class="jv">"2024-06-30"</span> },
+      { <span class="jk">"name"</span>: <span class="jv">"M3 — Optimise"</span>,    <span class="jk">"amount"</span>: <span class="jn">32000</span>, <span class="jk">"due_date"</span>: <span class="jv">"2024-08-31"</span> },
+      { <span class="jk">"name"</span>: <span class="jv">"M4 — Handover"</span>,    <span class="jk">"amount"</span>: <span class="jn">16000</span>, <span class="jk">"due_date"</span>: <span class="jv">"2024-09-30"</span> }
+    ],
+    <span class="jk">"key_contacts"</span>: [
+      { <span class="jk">"name"</span>: <span class="jv">"Sarah Chen"</span>,   <span class="jk">"role"</span>: <span class="jv">"Project Sponsor"</span>,  <span class="jk">"email"</span>: <span class="jv">"sarah.chen@acme-fin.com"</span> },
+      { <span class="jk">"name"</span>: <span class="jv">"James Okafor"</span>, <span class="jk">"role"</span>: <span class="jv">"Delivery Lead"</span>,    <span class="jk">"email"</span>: <span class="jv">"j.okafor@techbuild.io"</span> }
+    ]
+  },
+  <span class="jk">"agent_metrics"</span>: [{ <span class="jk">"agent"</span>: <span class="jv">"FieldExtractionAgent"</span>, <span class="jk">"input_tokens"</span>: <span class="jn">1043</span>, <span class="jk">"output_tokens"</span>: <span class="jn">312</span>, <span class="jk">"cost_usd"</span>: <span class="jn">0.00228</span> }],
+  <span class="jk">"partial"</span>: <span class="jb">false</span>
+}</div>
+      </div>
+    </div>
+    <div class="metrics-strip">
+      <div class="metric"><span class="metric-label">Input tokens</span><span class="metric-value color-cyan">1,043</span></div>
+      <div class="metric"><span class="metric-label">Output tokens</span><span class="metric-value color-cyan">312</span></div>
+      <div class="metric"><span class="metric-label">Max tokens</span><span class="metric-value color-muted">4,096</span></div>
+      <div class="metric"><span class="metric-label">Cost (est.)</span><span class="metric-value color-amber">$0.00228</span></div>
+      <div class="metric"><span class="metric-label">Output field</span><span class="metric-value color-amber">extracted_fields</span></div>
+    </div>
+  </div>
+
+  <!-- ── SummaryAgent ── -->
+  <div class="agent-card" style="border-color:var(--orange-dim);">
+    <div class="agent-card-header">
+      <span class="agent-tag" style="background:var(--orange-dim);color:var(--orange);">parallel C</span>
+      <span class="agent-card-name" style="color:var(--orange);">SummaryAgent</span>
+      <span style="font-size:10px;color:var(--muted);margin-left:auto;">tool: summarize_document · max_tokens=512</span>
+    </div>
+    <div class="agent-card-body">
+
+      <div class="panel-row">
+        <div class="panel">
+          <div class="panel-header" style="color:var(--muted);">System prompt</div>
+          <div class="panel-body"><span style="color:var(--text);">You are a document summarization specialist.
+Write a concise 2–3 sentence plain-language summary
+that captures:
+- The document's purpose and type
+- The key parties, amounts, dates, or actions involved
+- Any important outcome or context
+
+Be specific — reference actual values from the document
+(names, amounts, dates).</span></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header" style="color:var(--muted);">User message</div>
+          <div class="panel-body"><span style="color:var(--muted);">Document type: <span style="color:var(--orange);">Statement of Work</span>
+
+Summarise this document:
+
+</span><span style="color:var(--orange);">[serialized document — same string as stage 3]</span></div>
+        </div>
+      </div>
+
+      <div style="margin-top:0.9rem;">
+        <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Tool call response → state update</div>
+        <div class="output-json">{
+  <span class="jk">"summary"</span>: <span class="jv">"This Statement of Work (SOW-2024-0047) between Acme Financial Services
+and TechBuild Solutions Ltd. defines a four-milestone cloud migration project
+to move 40 workloads to AWS us-east-1, with a total budget of $120,000 AUD
+across a six-month engagement from February to September 2024. Deliverables
+include architecture review, workload lift-and-shift, FinOps optimisation, and
+a final handover package with runbooks and 30-day hypercare. Payments are
+milestone-based on Net 30 terms."</span>,
+  <span class="jk">"agent_metrics"</span>: [{ <span class="jk">"agent"</span>: <span class="jv">"SummaryAgent"</span>, <span class="jk">"input_tokens"</span>: <span class="jn">874</span>, <span class="jk">"output_tokens"</span>: <span class="jn">86</span>, <span class="jk">"cost_usd"</span>: <span class="jn">0.000643</span> }],
+  <span class="jk">"partial"</span>: <span class="jb">false</span>
+}</div>
+      </div>
+    </div>
+    <div class="metrics-strip">
+      <div class="metric"><span class="metric-label">Input tokens</span><span class="metric-value color-cyan">874</span></div>
+      <div class="metric"><span class="metric-label">Output tokens</span><span class="metric-value color-cyan">86</span></div>
+      <div class="metric"><span class="metric-label">Max tokens</span><span class="metric-value color-muted">512</span></div>
+      <div class="metric"><span class="metric-label">Cost (est.)</span><span class="metric-value color-amber">$0.000643</span></div>
+      <div class="metric"><span class="metric-label">Output field</span><span class="metric-value color-orange">summary</span></div>
+    </div>
+  </div>
+
+  <!-- State merge note -->
+  <div class="callout" style="border-left-color:var(--green)">
+    <strong>State merge after fan-in:</strong> LangGraph collects the three return dicts and merges them into <code>PipelineState</code>. Fields with <code>Annotated[list, operator.add]</code> (<code>errors</code>, <code>agent_metrics</code>) are <em>concatenated</em>; <code>Annotated[bool, operator.or_]</code> (<code>partial</code>) is ORed. All three agents write different top-level keys (<code>tags</code>, <code>extracted_fields</code>, <code>summary</code>) so there is no conflict.
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── -->
+<!-- STAGE 6 — Final response                            -->
+<!-- ─────────────────────────────────────────────────── -->
+<section class="stage" id="stage-response">
+  <div class="stage-header">
+    <span class="stage-badge" style="background:var(--red-dim);color:var(--red);">6</span>
+    <span class="stage-name">Final response</span>
+    <span class="stage-source">pipeline.py · DocumentPipeline.run() · ProcessDocumentResponse</span>
+  </div>
+
+  <div class="callout" style="border-left-color:var(--red)">
+    After the graph reaches END, <code>DocumentPipeline.run()</code> reads the merged final state, assembles a <code>ProcessDocumentResponse</code>, and returns it. The API serialises this as JSON.
+  </div>
+
+  <div class="response-block">
+    <div class="response-block-header">
+      <span>HTTP 200 · application/json</span>
+      <span style="margin-left:auto;">POST /process_document</span>
+    </div>
+    <div class="response-block-body"><span style="color:var(--muted);">{</span>
+  <span class="jk">"document_id"</span>: <span class="jv">"d4e8f3c2-1a9b-47de-8fba-cb312e4a0091"</span>,
+
+  <span class="jk">"output"</span>: {
+    <span class="jk">"classification"</span>: <span class="jv">"Statement of Work"</span>,
+
+    <span class="jk">"tags"</span>: [
+      <span class="jv">"milestone-based"</span>, <span class="jv">"cloud-migration"</span>, <span class="jv">"aws"</span>,
+      <span class="jv">"fintech"</span>, <span class="jv">"multi-phase"</span>, <span class="jv">"infrastructure"</span>
+    ],
+
+    <span class="jk">"extracted_fields"</span>: {
+      <span class="jk">"project_name"</span>:   <span class="jv">"Cloud Migration Platform"</span>,
+      <span class="jk">"sow_number"</span>:     <span class="jv">"SOW-2024-0047"</span>,
+      <span class="jk">"client"</span>:         <span class="jv">"Acme Financial Services Ltd."</span>,
+      <span class="jk">"vendor"</span>:         <span class="jv">"TechBuild Solutions Ltd."</span>,
+      <span class="jk">"start_date"</span>:     <span class="jv">"2024-02-01"</span>,
+      <span class="jk">"end_date"</span>:       <span class="jv">"2024-09-30"</span>,
+      <span class="jk">"total_budget"</span>:   <span class="jn">120000</span>,
+      <span class="jk">"currency"</span>:       <span class="jv">"AUD"</span>,
+      <span class="jk">"payment_terms"</span>:  <span class="jv">"Milestone-based, Net 30"</span>,
+      <span class="jk">"workloads_count"</span>: <span class="jn">40</span>,
+      <span class="jk">"cloud_provider"</span>: <span class="jv">"AWS"</span>,
+      <span class="jk">"aws_region"</span>:     <span class="jv">"us-east-1"</span>,
+      <span class="jk">"milestones"</span>: [
+        { <span class="jk">"name"</span>: <span class="jv">"M1 — Discovery"</span>,   <span class="jk">"amount"</span>: <span class="jn">24000</span>, <span class="jk">"due_date"</span>: <span class="jv">"2024-03-31"</span> },
+        { <span class="jk">"name"</span>: <span class="jv">"M2 — Lift & Shift"</span>, <span class="jk">"amount"</span>: <span class="jn">48000</span>, <span class="jk">"due_date"</span>: <span class="jv">"2024-06-30"</span> },
+        { <span class="jk">"name"</span>: <span class="jv">"M3 — Optimise"</span>,    <span class="jk">"amount"</span>: <span class="jn">32000</span>, <span class="jk">"due_date"</span>: <span class="jv">"2024-08-31"</span> },
+        { <span class="jk">"name"</span>: <span class="jv">"M4 — Handover"</span>,    <span class="jk">"amount"</span>: <span class="jn">16000</span>, <span class="jk">"due_date"</span>: <span class="jv">"2024-09-30"</span> }
+      ],
+      <span class="jk">"key_contacts"</span>: [
+        { <span class="jk">"name"</span>: <span class="jv">"Sarah Chen"</span>,   <span class="jk">"role"</span>: <span class="jv">"Project Sponsor"</span>, <span class="jk">"email"</span>: <span class="jv">"sarah.chen@acme-fin.com"</span> },
+        { <span class="jk">"name"</span>: <span class="jv">"James Okafor"</span>, <span class="jk">"role"</span>: <span class="jv">"Delivery Lead"</span>,   <span class="jk">"email"</span>: <span class="jv">"j.okafor@techbuild.io"</span> }
+      ]
+    },
+
+    <span class="jk">"summary"</span>: <span class="jv">"This Statement of Work (SOW-2024-0047) between Acme Financial
+Services and TechBuild Solutions Ltd. defines a four-milestone cloud migration
+project to move 40 workloads to AWS us-east-1, with a total budget of $120,000
+AUD across a six-month engagement. Payments are milestone-based on Net 30 terms."</span>
+  },
+
+  <span class="jk">"metrics"</span>: {
+    <span class="jk">"document_id"</span>:              <span class="jv">"d4e8f3c2-1a9b-47de-8fba-cb312e4a0091"</span>,
+    <span class="jk">"request_latency_seconds"</span>:   <span class="jn">4.82</span>,
+    <span class="jk">"total_token_cost_usd"</span>:      <span class="jn">0.003234</span>,
+    <span class="jk">"errors"</span>:                    <span class="jb">null</span>,
+    <span class="jk">"agent_metrics"</span>: [
+      { <span class="jk">"agent"</span>: <span class="jv">"ClassificationAgent"</span>,  <span class="jk">"input_tokens"</span>: <span class="jn">812</span>,  <span class="jk">"output_tokens"</span>: <span class="jn">12</span>,  <span class="jk">"cost_usd"</span>: <span class="jn">0.000148</span> },
+      { <span class="jk">"agent"</span>: <span class="jv">"TaggingAgent"</span>,        <span class="jk">"input_tokens"</span>: <span class="jn">874</span>,  <span class="jk">"output_tokens"</span>: <span class="jn">28</span>,  <span class="jk">"cost_usd"</span>: <span class="jn">0.000163</span> },
+      { <span class="jk">"agent"</span>: <span class="jv">"FieldExtractionAgent"</span>, <span class="jk">"input_tokens"</span>: <span class="jn">1043</span>, <span class="jk">"output_tokens"</span>: <span class="jn">312</span>, <span class="jk">"cost_usd"</span>: <span class="jn">0.002280</span> },
+      { <span class="jk">"agent"</span>: <span class="jv">"SummaryAgent"</span>,        <span class="jk">"input_tokens"</span>: <span class="jn">874</span>,  <span class="jk">"output_tokens"</span>: <span class="jn">86</span>,  <span class="jk">"cost_usd"</span>: <span class="jn">0.000643</span> }
+    ]
+  },
+
+  <span class="jk">"partial"</span>: <span class="jb">false</span>,
+  <span class="jk">"errors"</span>:  <span class="jb">null</span>
+<span style="color:var(--muted);">}</span></div>
+  </div>
+
+  <!-- total metrics summary -->
+  <div class="metrics-strip" style="border:1px solid var(--border);border-radius:6px;margin-top:1rem;">
+    <div class="metric"><span class="metric-label">Total latency</span><span class="metric-value color-green">4.82 s</span></div>
+    <div class="metric"><span class="metric-label">Total input tokens</span><span class="metric-value color-cyan">3,603</span></div>
+    <div class="metric"><span class="metric-label">Total output tokens</span><span class="metric-value color-cyan">438</span></div>
+    <div class="metric"><span class="metric-label">Total cost (est.)</span><span class="metric-value color-amber">$0.003234</span></div>
+    <div class="metric"><span class="metric-label">Parallel speedup</span><span class="metric-value color-green">~2.4× vs sequential</span></div>
+    <div class="metric"><span class="metric-label">Errors</span><span class="metric-value color-green">none</span></div>
+  </div>
+
+</section>
+
+</main>
+</div>
+
+<script>
+function toggleTheme() {
+  var r = document.documentElement;
+  var current = r.getAttribute('data-theme');
+  var isDark = current === 'dark' || (!current && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  r.setAttribute('data-theme', isDark ? 'light' : 'dark');
+}
+
+// Highlight active nav item on scroll
+var sections = document.querySelectorAll('.stage');
+var navItems = document.querySelectorAll('.nav-item[href^="#"]');
+var observer = new IntersectionObserver(function(entries) {
+  entries.forEach(function(e) {
+    if (e.isIntersecting) {
+      navItems.forEach(function(a) {
+        a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id);
+      });
+    }
+  });
+}, { threshold: 0.25 });
+sections.forEach(function(s) { observer.observe(s); });
+</script>
+</body>
+</html>

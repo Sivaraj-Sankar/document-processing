@@ -1,0 +1,1271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IDP Extraction POC — Docling + Chunking + OpenSearch</title>
+<style>
+:root {
+  --bg:#080f1c;--surface:#0f1929;--surface2:#162235;--surface3:#1c2e42;
+  --border:#1d3050;--border2:#264070;--text:#ccdaf0;--muted:#5a7a9a;--dim:#2a4060;
+  --cyan:#06b6d4;--cyan-bg:#001c24;--amber:#f59e0b;--amber-bg:#1a0f00;
+  --violet:#8b5cf6;--violet-bg:#150d2a;--fuchsia:#e879f9;--fuchsia-bg:#1a0520;
+  --green:#10b981;--green-bg:#001810;--orange:#f97316;--orange-bg:#1a0a00;
+  --red:#f87171;--blue:#3b82f6;--blue-bg:#051230;
+  --radius:10px;--radius-sm:6px;
+}
+@media(prefers-color-scheme:light){
+  :root{--bg:#f0f5fc;--surface:#fff;--surface2:#eef3fa;--surface3:#e4edf7;--border:#c8d8ea;--border2:#a8c0d8;--text:#12233a;--muted:#4a6680;--dim:#b0c8e0;--cyan-bg:#ebfbfe;--amber-bg:#fffbeb;--violet-bg:#f3effd;--fuchsia-bg:#fdf4ff;--green-bg:#ecfdf5;--orange-bg:#fff7ed;--blue-bg:#eff6ff;}
+}
+:root[data-theme="dark"]{--bg:#080f1c;--surface:#0f1929;--surface2:#162235;--surface3:#1c2e42;--border:#1d3050;--border2:#264070;--text:#ccdaf0;--muted:#5a7a9a;--dim:#2a4060;--cyan-bg:#001c24;--amber-bg:#1a0f00;--violet-bg:#150d2a;--fuchsia-bg:#1a0520;--green-bg:#001810;--orange-bg:#1a0a00;--blue-bg:#051230;}
+:root[data-theme="light"]{--bg:#f0f5fc;--surface:#fff;--surface2:#eef3fa;--surface3:#e4edf7;--border:#c8d8ea;--border2:#a8c0d8;--text:#12233a;--muted:#4a6680;--dim:#b0c8e0;--cyan-bg:#ebfbfe;--amber-bg:#fffbeb;--violet-bg:#f3effd;--fuchsia-bg:#fdf4ff;--green-bg:#ecfdf5;--orange-bg:#fff7ed;--blue-bg:#eff6ff;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px;scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65;padding-bottom:80px}
+.hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:18px 28px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.hdr-title{font-size:1rem;font-weight:700;letter-spacing:-.01em}
+.hdr-sub{font-size:.74rem;color:var(--muted);margin-top:2px}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:20px;cursor:pointer;font-size:.74rem;font-family:inherit}
+.theme-btn:hover{border-color:var(--cyan);color:var(--text)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.67rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:3px 9px;border-radius:20px}
+.p-cyan{background:var(--cyan-bg);color:var(--cyan);border:1px solid rgba(6,182,212,.25)}
+.p-amber{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,158,11,.25)}
+.p-violet{background:var(--violet-bg);color:var(--violet);border:1px solid rgba(139,92,246,.25)}
+.p-fuchsia{background:var(--fuchsia-bg);color:var(--fuchsia);border:1px solid rgba(232,121,249,.25)}
+.p-green{background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25)}
+.p-orange{background:var(--orange-bg);color:var(--orange);border:1px solid rgba(249,115,22,.25)}
+.p-blue{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(59,130,246,.25)}
+.sec{padding:22px 28px}
+.sec+.sec{border-top:1px solid var(--border)}
+.sec-label{font-size:.67rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-head{background:var(--surface2);border-bottom:1px solid var(--border);padding:11px 16px;display:flex;align-items:center;gap:10px;font-size:.82rem;font-weight:600}
+.card-body{padding:14px 16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media(max-width:860px){.grid2{grid-template-columns:1fr}}
+@media(max-width:900px){.grid3{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.grid3{grid-template-columns:1fr}}
+pre{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 15px;font-size:.72rem;line-height:1.55;overflow-x:auto;font-family:"SFMono-Regular","Consolas",monospace;tab-size:4}
+code{font-family:monospace;font-size:.72rem;background:var(--surface3);padding:1px 5px;border-radius:3px}
+.kw{color:#c792ea}.fn{color:#82aaff}.st{color:#c3e88d}.cm{color:#4a6a84}.nu{color:#f78c6c}.dc{color:#ffcb6b}.op{color:#89ddff}.kc{color:#ff5370}.sp{color:#5a7a9a}
+.note{display:flex;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:.78rem;color:var(--muted);margin-top:10px}
+.note .icon{flex-shrink:0}
+.note strong{color:var(--text)}
+.note-cyan{background:var(--cyan-bg);border-color:rgba(6,182,212,.2)}
+.note-cyan strong{color:var(--cyan)}
+.note-amber{background:var(--amber-bg);border-color:rgba(245,158,11,.2)}
+.note-amber strong{color:var(--amber)}
+.note-violet{background:var(--violet-bg);border-color:rgba(139,92,246,.2)}
+.note-violet strong{color:var(--violet)}
+.note-green{background:var(--green-bg);border-color:rgba(16,185,129,.2)}
+.note-green strong{color:var(--green)}
+.note-fuchsia{background:var(--fuchsia-bg);border-color:rgba(232,121,249,.2)}
+.note-fuchsia strong{color:var(--fuchsia)}
+.tabs{background:var(--surface);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:11px 18px;font-size:.79rem;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:color .2s,border-color .2s;user-select:none}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.step-row{display:flex;gap:14px;padding:10px 0}
+.step-n{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;position:relative}
+.step-n::after{content:'';position:absolute;left:50%;top:100%;width:1px;height:calc(100% + 10px);background:var(--border);transform:translateX(-50%)}
+.step-row:last-child .step-n::after{display:none}
+.step-body{flex:1;padding-bottom:10px}
+.step-title{font-size:.84rem;font-weight:600;margin-bottom:3px}
+.step-desc{font-size:.76rem;color:var(--muted)}
+.sn-cyan{background:var(--cyan-bg);color:var(--cyan)}
+.sn-amber{background:var(--amber-bg);color:var(--amber)}
+.sn-violet{background:var(--violet-bg);color:var(--violet)}
+.sn-green{background:var(--green-bg);color:var(--green)}
+.sn-orange{background:var(--orange-bg);color:var(--orange)}
+.sn-fuchsia{background:var(--fuchsia-bg);color:var(--fuchsia)}
+.sn-blue{background:var(--blue-bg);color:var(--blue)}
+.dtable{width:100%;border-collapse:collapse;font-size:.76rem}
+.dtable th{text-align:left;padding:8px 12px;background:var(--surface2);color:var(--muted);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700;border-bottom:1px solid var(--border)}
+.dtable td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+.dtable tr:last-child td{border-bottom:none}
+.dtable tr:hover td{background:var(--surface2)}
+.qa-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
+.qa-head{padding:16px 20px;display:flex;align-items:flex-start;gap:14px;cursor:pointer}
+.qa-head:hover{background:var(--surface2)}
+.qa-qnum{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0}
+.qa-qtxt{font-size:.92rem;font-weight:600;flex:1;padding-top:5px}
+.qa-body{padding:0 20px 20px;border-top:1px solid var(--border)}
+.qa-answer-head{font-size:.82rem;font-weight:700;color:var(--cyan);margin:14px 0 8px}
+.flow-diagram{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 14px}
+.flow-box{padding:7px 12px;border-radius:var(--radius-sm);font-size:.74rem;font-weight:600;text-align:center}
+.flow-arrow{color:var(--muted);font-size:.9rem;flex-shrink:0}
+.fb-cyan{background:var(--cyan-bg);color:var(--cyan);border:1px solid rgba(6,182,212,.3)}
+.fb-amber{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.fb-violet{background:var(--violet-bg);color:var(--violet);border:1px solid rgba(139,92,246,.3)}
+.fb-green{background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.3)}
+.fb-fuchsia{background:var(--fuchsia-bg);color:var(--fuchsia);border:1px solid rgba(232,121,249,.3)}
+.fb-orange{background:var(--orange-bg);color:var(--orange);border:1px solid rgba(249,115,22,.3)}
+.fb-blue{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(59,130,246,.3)}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.compare-col{padding:16px 18px}
+.compare-col+.compare-col{border-left:1px solid var(--border)}
+.compare-head{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}
+.compare-item{font-size:.77rem;color:var(--muted);padding:4px 0;display:flex;align-items:flex-start;gap:8px}
+.compare-item::before{content:'·';color:var(--dim);flex-shrink:0}
+@media(max-width:700px){.compare-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div>
+    <div class="hdr-title">IDP Extraction POC &mdash; Docling + Chunking + OpenSearch</div>
+    <div class="hdr-sub">All-in-one Python script mirroring the genai-idp pipeline &nbsp;·&nbsp; no Kafka, no microservices, no event-driven architecture</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span class="pill p-cyan">Docling</span><span class="pill p-amber">Chunking</span><span class="pill p-violet">OpenSearch</span><span class="pill p-fuchsia">AWS KB</span>
+    <button class="theme-btn" onclick="toggleTheme()">Toggle theme</button>
+  </div>
+</header>
+
+<!-- What this covers -->
+<div class="sec">
+  <div class="sec-label">What this page covers</div>
+  <div class="grid3" style="margin-bottom:18px">
+    <div class="card"><div class="card-head"><span class="pill p-cyan">POC</span>All-in-one pipeline script</div>
+      <div class="card-body" style="font-size:.77rem;color:var(--muted)">A single Python file that does: model download → Docling extraction → chunking → embeddings → OpenSearch indexing → hybrid search. Mirrors the genai-idp project logic without microservices or Kafka.</div></div>
+    <div class="card"><div class="card-head"><span class="pill p-violet">Q&amp;A</span>3 critical questions answered</div>
+      <div class="card-body" style="font-size:.77rem;color:var(--muted)">1) Create vs sync index &nbsp; 2) How RAG knows about updated index &nbsp; 3) AWS Knowledge Base vs OpenSearch — are they the same? With diagrams and real code from the project.</div></div>
+    <div class="card"><div class="card-head"><span class="pill p-amber">Search</span>Hybrid search example</div>
+      <div class="card-body" style="font-size:.77rem;color:var(--muted)">Complete working sample: BM25 keyword + kNN vector search combined, with score normalization. Plus the AWS Bedrock KB retrieval API equivalent.</div></div>
+  </div>
+
+  <div class="sec-label" style="margin-top:4px">genai-idp project vs this POC</div>
+  <div class="compare-grid">
+    <div class="compare-col">
+      <div class="compare-head" style="color:var(--amber)">genai-idp (production)</div>
+      <div class="compare-item">6 microservices, each its own container</div>
+      <div class="compare-item">Kafka topics between every stage</div>
+      <div class="compare-item">Bedrock KB does chunking + embedding via ingestion job</div>
+      <div class="compare-item">OpenSearch Serverless (AOSS) as vector store</div>
+      <div class="compare-item">Async, at-least-once delivery, horizontal scale</div>
+      <div class="compare-item">AWS Secrets Manager, SASL auth, JWT</div>
+      <div class="compare-item">Status tracked in PostgreSQL per upload</div>
+    </div>
+    <div class="compare-col">
+      <div class="compare-head" style="color:var(--cyan)">This POC (learning)</div>
+      <div class="compare-item">One Python script, runs top-to-bottom</div>
+      <div class="compare-item">Direct function calls, no message broker</div>
+      <div class="compare-item">We implement chunking in Python (same config)</div>
+      <div class="compare-item">Local OpenSearch (Docker) or any OpenSearch</div>
+      <div class="compare-item">Sequential, synchronous, easy to debug</div>
+      <div class="compare-item">No auth, no secrets — just env vars</div>
+      <div class="compare-item">Prints results to terminal</div>
+    </div>
+  </div>
+</div>
+
+<!-- Setup -->
+<div class="sec">
+  <div class="sec-label">Quick setup</div>
+  <div class="grid2" style="gap:16px">
+    <div>
+      <div style="font-size:.77rem;color:var(--muted);margin-bottom:8px">1. Start OpenSearch locally via Docker</div>
+      <pre><span class="cm"># docker-compose.yml</span>
+version: <span class="st">'3'</span>
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.17.0
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=<span class="kc">true</span>
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - <span class="st">"9200:9200"</span>
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+volumes:
+  opensearch-data:</pre>
+      <pre style="margin-top:8px"><span class="fn">docker compose up -d</span>
+<span class="cm"># OpenSearch ready at http://localhost:9200</span></pre>
+    </div>
+    <div>
+      <div style="font-size:.77rem;color:var(--muted);margin-bottom:8px">2. Install Python dependencies</div>
+      <pre><span class="cm"># requirements.txt</span>
+docling>=2.52.0            <span class="cm"># PDF/DOCX/PPTX extraction</span>
+docling-core>=2.0.0
+sentence-transformers>=3.0  <span class="cm"># local embeddings (384-dim)</span>
+opensearch-py>=2.7.0        <span class="cm"># OpenSearch client</span>
+boto3>=1.35.0               <span class="cm"># optional: AWS Bedrock embeddings</span>
+tqdm>=4.65.0</pre>
+      <pre style="margin-top:8px"><span class="fn">pip install -r requirements.txt</span>
+
+<span class="cm"># Docling auto-downloads ML models on first run:</span>
+<span class="cm">#   DoclingParseV2   (~400MB, layout detection)</span>
+<span class="cm">#   TableTransformer  (~250MB, table structure)</span>
+<span class="cm">#   easyocr/rapidocr  (~100MB, text OCR)</span>
+<span class="cm"># Models cached in ~/.cache/docling/</span></pre>
+      <div class="note note-amber" style="margin-top:8px">
+        <span class="icon">💡</span>
+        <div>First run downloads ~750MB of models. The real project bakes these into the Docker image in the <strong>model-loader</strong> build stage so pods start instantly.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Code tabs -->
+<div class="tabs" id="code-tabs">
+  <div class="tab active" data-tab="c1" onclick="switchTab('code-tabs','c1')">Step 1–2: Docling Extract</div>
+  <div class="tab" data-tab="c2" onclick="switchTab('code-tabs','c2')">Step 3: Chunking</div>
+  <div class="tab" data-tab="c3" onclick="switchTab('code-tabs','c3')">Step 4: Embeddings</div>
+  <div class="tab" data-tab="c4" onclick="switchTab('code-tabs','c4')">Step 5–6: Index &amp; Store</div>
+  <div class="tab" data-tab="c5" onclick="switchTab('code-tabs','c5')">Full Pipeline (all-in-one)</div>
+</div>
+
+<!-- Step 1-2 -->
+<div class="tab-panel active" id="tab-c1">
+<div class="sec">
+  <div class="note note-cyan" style="margin-bottom:14px">
+    <span class="icon">🔍</span>
+    <div>This mirrors <strong>DoclingStrategyProcessor</strong> in <code>services/genai-idp-extractor/src/services/extractors/docling/docling_strategy_processor.py</code>. Same models (DoclingParseV2 + RapidOCR + TATR), same figure filtering thresholds.</div>
+  </div>
+  <pre><span class="cm">"""
+Step 1-2: Docling Model Download + Document Extraction
+Mirrors: genai-idp-extractor → DoclingStrategyProcessor
+"""</span>
+<span class="kw">import</span> io
+<span class="kw">from</span> dataclasses <span class="kw">import</span> dataclass, field
+<span class="kw">from</span> docling.document_converter <span class="kw">import</span> DocumentConverter, PdfFormatOption
+<span class="kw">from</span> docling.datamodel.base_models <span class="kw">import</span> InputFormat
+<span class="kw">from</span> docling.datamodel.pipeline_options <span class="kw">import</span> PdfPipelineOptions, TableFormerMode
+
+<span class="cm"># ── Data models (mirrors extraction_models.py in libs/pipeline-events) ──────</span>
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="dc">ExtractedPage</span>:
+    page_number: <span class="fn">int</span>
+    text: <span class="fn">str</span>                 <span class="cm"># full page text (→ page_text.txt in real project)</span>
+    word_count: <span class="fn">int</span>
+    figure_count: <span class="fn">int</span>
+    table_count: <span class="fn">int</span>
+
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="dc">ExtractedDocument</span>:
+    source_path: <span class="fn">str</span>
+    file_type: <span class="fn">str</span>
+    total_pages: <span class="fn">int</span>
+    pages: <span class="fn">list</span>[ExtractedPage] = field(default_factory=list)
+    figures: <span class="fn">list</span>[<span class="fn">dict</span>]         = field(default_factory=list)
+    tables:  <span class="fn">list</span>[<span class="fn">dict</span>]         = field(default_factory=list)
+
+
+<span class="kw">def</span> <span class="fn">build_docling_converter</span>() -> DocumentConverter:
+    <span class="st">"""
+    Mirrors DoclingStrategyProcessor.create_instance().
+    Enables: DoclingParseV2 (layout) + RapidOCR (text) + TATR (tables).
+    Models auto-download on first call to ~/.cache/docling/
+    """</span>
+    options = PdfPipelineOptions()
+    options.do_ocr = <span class="kc">True</span>                              <span class="cm"># RapidOCR</span>
+    options.do_table_structure = <span class="kc">True</span>
+    options.table_structure_options.mode = TableFormerMode.ACCURATE  <span class="cm"># TATR</span>
+    options.images_scale = <span class="nu">2.0</span>                         <span class="cm"># higher res for figures</span>
+    options.generate_picture_images = <span class="kc">True</span>
+
+    <span class="kw">print</span>(<span class="st">"[Docling] Building converter (models download on first run ~750MB)..."</span>)
+    <span class="kw">return</span> DocumentConverter(
+        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
+    )
+
+
+<span class="cm"># Figure filtering thresholds — mirrors settings.py in the real project</span>
+FIGURE_MIN_WIDTH   = <span class="nu">200</span>    <span class="cm"># pixels</span>
+FIGURE_MIN_HEIGHT  = <span class="nu">50</span>     <span class="cm"># pixels</span>
+FIGURE_MIN_BYTES   = <span class="nu">16384</span>  <span class="cm"># 16 KB</span>
+FIGURE_MIN_ASPECT  = <span class="nu">0.1</span>
+FIGURE_MAX_ASPECT  = <span class="nu">5.0</span>
+
+<span class="kw">def</span> <span class="fn">_figure_passes_filter</span>(img_bytes: <span class="fn">bytes</span>) -> <span class="fn">bool</span>:
+    <span class="st">"""Post-extraction figure filter (mirrors real project)."""</span>
+    <span class="kw">if</span> <span class="fn">len</span>(img_bytes) < FIGURE_MIN_BYTES:
+        <span class="kw">return</span> <span class="kc">False</span>
+    <span class="kw">from</span> PIL <span class="kw">import</span> Image
+    <span class="kw">import</span> io
+    img = Image.open(io.BytesIO(img_bytes))
+    w, h = img.size
+    aspect = w / h <span class="kw">if</span> h > <span class="nu">0</span> <span class="kw">else</span> <span class="nu">0</span>
+    <span class="kw">return</span> (w >= FIGURE_MIN_WIDTH <span class="kw">and</span>
+            h >= FIGURE_MIN_HEIGHT <span class="kw">and</span>
+            FIGURE_MIN_ASPECT <= aspect <= FIGURE_MAX_ASPECT)
+
+
+<span class="kw">def</span> <span class="fn">extract_document</span>(converter: DocumentConverter, pdf_path: <span class="fn">str</span>) -> ExtractedDocument:
+    <span class="st">"""
+    Mirrors DoclingStrategyProcessor._process_documents_batch() + _handle_docling_results().
+    Returns per-page text, tables (markdown + CSV), and figure info.
+    """</span>
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"[Docling] Converting: {pdf_path}"</span>)
+    result = converter.convert(pdf_path)
+    doc    = result.document
+
+    extracted = ExtractedDocument(
+        source_path=pdf_path,
+        file_type=<span class="st">"PDF"</span>,
+        total_pages=<span class="fn">len</span>(doc.pages),
+    )
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"[Docling] {len(doc.pages)} pages | {len(doc.tables)} tables | {len(doc.pictures)} pictures"</span>)
+
+    <span class="cm"># ── Per-page text ─────────────────────────────────────────────────────────</span>
+    page_texts: <span class="fn">dict</span>[<span class="fn">int</span>, <span class="fn">list</span>[<span class="fn">str</span>]] = {}
+    <span class="kw">for</span> element, level <span class="kw">in</span> doc.iterate_items():
+        page_no = element.prov[<span class="nu">0</span>].page_no <span class="kw">if</span> element.prov <span class="kw">else</span> <span class="nu">1</span>
+        <span class="kw">if</span> <span class="fn">hasattr</span>(element, <span class="st">'text'</span>) <span class="kw">and</span> element.text:
+            page_texts.setdefault(page_no, []).append(element.text)
+
+    <span class="cm"># ── Tables ────────────────────────────────────────────────────────────────</span>
+    <span class="kw">for</span> tbl <span class="kw">in</span> doc.tables:
+        page_no = tbl.prov[<span class="nu">0</span>].page_no <span class="kw">if</span> tbl.prov <span class="kw">else</span> <span class="nu">1</span>
+        <span class="kw">try</span>:
+            md  = tbl.export_to_markdown()
+            csv = tbl.export_to_dataframe().to_csv(index=<span class="kc">False</span>)
+        <span class="kw">except</span> Exception:
+            md = csv = <span class="st">""</span>
+        extracted.tables.append({<span class="st">"page"</span>: page_no, <span class="st">"markdown"</span>: md, <span class="st">"csv"</span>: csv})
+
+    <span class="cm"># ── Figures ───────────────────────────────────────────────────────────────</span>
+    <span class="kw">for</span> pic <span class="kw">in</span> doc.pictures:
+        page_no = pic.prov[<span class="nu">0</span>].page_no <span class="kw">if</span> pic.prov <span class="kw">else</span> <span class="nu">1</span>
+        img_bytes = <span class="kc">None</span>
+        <span class="kw">try</span>:
+            img = pic.get_image(result)
+            <span class="kw">if</span> img:
+                buf = io.BytesIO(); img.save(buf, format=<span class="st">"PNG"</span>)
+                img_bytes = buf.getvalue()
+        <span class="kw">except</span> Exception:
+            <span class="kw">pass</span>
+        <span class="cm"># Apply post-extraction size filter (mirrors real project)</span>
+        <span class="kw">if</span> img_bytes <span class="kw">and</span> <span class="kw">not</span> _figure_passes_filter(img_bytes):
+            <span class="kw">continue</span>   <span class="cm"># decorative / too small → discard</span>
+        extracted.figures.append({
+            <span class="st">"page"</span>: page_no, <span class="st">"image_bytes"</span>: img_bytes,
+            <span class="st">"caption"</span>: <span class="fn">str</span>(<span class="fn">getattr</span>(pic, <span class="st">'caption'</span>, <span class="st">''</span>)),
+            <span class="st">"fig_id"</span>:  <span class="fn">str</span>(pic.self_ref),
+        })
+
+    <span class="cm"># ── Build per-page objects ─────────────────────────────────────────────────</span>
+    <span class="kw">for</span> page <span class="kw">in</span> doc.pages:
+        pn   = page.page_no
+        text = <span class="st">"\n\n"</span>.join(page_texts.get(pn, []))
+        extracted.pages.append(ExtractedPage(
+            page_number=pn,
+            text=text,
+            word_count=<span class="fn">len</span>(text.split()),
+            figure_count=<span class="fn">sum</span>(<span class="nu">1</span> <span class="kw">for</span> f <span class="kw">in</span> extracted.figures <span class="kw">if</span> f[<span class="st">"page"</span>] == pn),
+            table_count=<span class="fn">sum</span>(<span class="nu">1</span> <span class="kw">for</span> t <span class="kw">in</span> extracted.tables  <span class="kw">if</span> t[<span class="st">"page"</span>] == pn),
+        ))
+
+    <span class="kw">for</span> p <span class="kw">in</span> extracted.pages:
+        <span class="kw">print</span>(<span class="fn">f</span><span class="st">"  page {p.page_number}: {p.word_count} words, {p.figure_count} figs, {p.table_count} tables"</span>)
+    <span class="kw">return</span> extracted</pre>
+</div>
+</div>
+
+<!-- Step 3: Chunking -->
+<div class="tab-panel" id="tab-c2">
+<div class="sec">
+  <div class="note note-amber" style="margin-bottom:14px">
+    <span class="icon">✂️</span>
+    <div>The real project delegates chunking to <strong>AWS Bedrock</strong> (FIXED_SIZE, 300 tokens, 20% overlap). The Transformer service only copies .txt/.csv files and writes <code>.metadata.json</code> companions. <strong>This POC implements the same chunking in Python</strong> so you can see and control the exact behaviour.</div>
+  </div>
+  <pre><span class="cm">"""
+Step 3: Fixed-size chunking with overlap
+Mirrors: Bedrock KB FIXED_SIZE chunking config (KB_MAX_TOKENS=300, KB_OVERLAP_PERCENTAGE=20%)
+Real config in: libs/knowledge-base/src/idp_kb/config.py
+"""</span>
+<span class="kw">from</span> dataclasses <span class="kw">import</span> dataclass, field
+<span class="kw">from</span> typing     <span class="kw">import</span> Optional
+
+<span class="cm"># Mirrors Bedrock KB chunking config ─────────────────────────────────────────</span>
+MAX_TOKENS      = <span class="nu">300</span>    <span class="cm"># KB_MAX_TOKENS  — Bedrock config</span>
+OVERLAP_PCT     = <span class="nu">0.20</span>   <span class="cm"># KB_OVERLAP_PERCENTAGE — 20%</span>
+WORDS_PER_TOKEN = <span class="nu">0.75</span>   <span class="cm"># rough: 1 token ≈ 0.75 English words</span>
+
+
+<span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="dc">TextChunk</span>:
+    chunk_id:    <span class="fn">str</span>
+    project_id:  <span class="fn">str</span>
+    upload_id:   <span class="fn">str</span>
+    source_path: <span class="fn">str</span>
+    page_number: <span class="fn">int</span>
+    source_type: <span class="fn">str</span>          <span class="cm"># "text" | "table" | "figure_summary"</span>
+    text:        <span class="fn">str</span>
+    metadata:    <span class="fn">dict</span>         = field(default_factory=<span class="fn">dict</span>)
+
+    <span class="cm"># mirrors .metadata.json companion format written by Transformer service</span>
+    document_type:   Optional[<span class="fn">str</span>] = <span class="kc">None</span>  <span class="cm"># set after LLM classification</span>
+    document_domain: Optional[<span class="fn">str</span>] = <span class="kc">None</span>
+    image_summary:   <span class="fn">bool</span>           = <span class="kc">False</span>  <span class="cm"># True for figure caption chunks</span>
+
+
+<span class="kw">def</span> <span class="fn">chunk_text</span>(
+    text:        <span class="fn">str</span>,
+    max_tokens:  <span class="fn">int</span>   = MAX_TOKENS,
+    overlap_pct: <span class="fn">float</span> = OVERLAP_PCT,
+) -> <span class="fn">list</span>[<span class="fn">str</span>]:
+    <span class="st">"""
+    Fixed-size sliding-window chunker.
+    Bedrock KB does exactly this server-side during ingestion job.
+    We do it here in Python so we can inspect / control each chunk.
+    """</span>
+    words = text.split()
+    <span class="kw">if not</span> words:
+        <span class="kw">return</span> []
+
+    max_words     = <span class="fn">max</span>(<span class="nu">1</span>, <span class="fn">int</span>(max_tokens * WORDS_PER_TOKEN))
+    overlap_words = <span class="fn">max</span>(<span class="nu">1</span>, <span class="fn">int</span>(max_words * overlap_pct))
+    chunks: <span class="fn">list</span>[<span class="fn">str</span>] = []
+    start = <span class="nu">0</span>
+
+    <span class="kw">while</span> start < <span class="fn">len</span>(words):
+        end   = <span class="fn">min</span>(start + max_words, <span class="fn">len</span>(words))
+        chunks.append(<span class="st">" "</span>.join(words[start:end]))
+        <span class="kw">if</span> end >= <span class="fn">len</span>(words):
+            <span class="kw">break</span>
+        start = end - overlap_words   <span class="cm"># slide back by overlap</span>
+
+    <span class="kw">return</span> chunks
+
+
+<span class="kw">def</span> <span class="fn">build_chunks</span>(
+    doc:        ExtractedDocument,
+    project_id: <span class="fn">str</span>,
+    upload_id:  <span class="fn">str</span>,
+) -> <span class="fn">list</span>[TextChunk]:
+    <span class="st">"""
+    Mirrors: Transformer service writes text/table/figure .txt files +
+             Bedrock KB ingestion job chunks them during start_ingestion_job().
+    We combine both steps here.
+
+    What gets chunked (mirrors Transformer TEXT_FILE_EXTENSIONS = {.txt, .md, .csv}):
+      - Page text   → chunk into MAX_TOKENS pieces (source_type="text")
+      - Table CSV   → chunk (source_type="table")
+      - Figure caption → single chunk each (source_type="figure_summary")
+    """</span>
+    chunks: <span class="fn">list</span>[TextChunk] = []
+
+    <span class="cm"># 1. Page text ── mirrors page_text.txt files ─────────────────────────────</span>
+    <span class="kw">for</span> page <span class="kw">in</span> doc.pages:
+        <span class="kw">if not</span> page.text.strip():
+            <span class="kw">continue</span>
+        <span class="kw">for</span> i, chunk_str <span class="kw">in</span> <span class="fn">enumerate</span>(chunk_text(page.text)):
+            chunks.append(TextChunk(
+                chunk_id    = <span class="fn">f</span><span class="st">"{upload_id}_p{page.page_number}_txt_{i}"</span>,
+                project_id  = project_id,
+                upload_id   = upload_id,
+                source_path = doc.source_path,
+                page_number = page.page_number,
+                source_type = <span class="st">"text"</span>,
+                text        = chunk_str,
+                metadata    = {<span class="st">"total_pages"</span>: doc.total_pages,
+                               <span class="st">"chunk_index"</span>: i,
+                               <span class="st">"file_type"</span>: doc.file_type},
+            ))
+
+    <span class="cm"># 2. Table content ── mirrors table_N.csv / table_N.md files ─────────────</span>
+    <span class="kw">for</span> j, tbl <span class="kw">in</span> <span class="fn">enumerate</span>(doc.tables):
+        content = tbl.get(<span class="st">"markdown"</span>, <span class="st">""</span>) <span class="kw">or</span> tbl.get(<span class="st">"csv"</span>, <span class="st">""</span>)
+        <span class="kw">if not</span> content.strip():
+            <span class="kw">continue</span>
+        <span class="kw">for</span> i, chunk_str <span class="kw">in</span> <span class="fn">enumerate</span>(chunk_text(content)):
+            chunks.append(TextChunk(
+                chunk_id    = <span class="fn">f</span><span class="st">"{upload_id}_p{tbl['page']}_tbl{j}_{i}"</span>,
+                project_id  = project_id,
+                upload_id   = upload_id,
+                source_path = doc.source_path,
+                page_number = tbl[<span class="st">"page"</span>],
+                source_type = <span class="st">"table"</span>,
+                text        = chunk_str,
+                metadata    = {<span class="st">"chunk_index"</span>: i},
+            ))
+
+    <span class="cm"># 3. Figure captions ── mirrors figure_N.txt LLM summary files ───────────</span>
+    <span class="kw">for</span> fig <span class="kw">in</span> doc.figures:
+        caption = (fig.get(<span class="st">"caption"</span>) <span class="kw">or</span> <span class="st">""</span>).strip()
+        <span class="kw">if not</span> caption:
+            <span class="kw">continue</span>
+        chunks.append(TextChunk(
+            chunk_id     = <span class="fn">f</span><span class="st">"{upload_id}_p{fig['page']}_fig_{fig['fig_id']}"</span>,
+            project_id   = project_id,
+            upload_id    = upload_id,
+            source_path  = doc.source_path,
+            page_number  = fig[<span class="st">"page"</span>],
+            source_type  = <span class="st">"figure_summary"</span>,
+            text         = caption,
+            image_summary= <span class="kc">True</span>,
+            metadata     = {<span class="st">"fig_id"</span>: fig[<span class="st">"fig_id"</span>]},
+        ))
+
+    txt_ct  = <span class="fn">sum</span>(<span class="nu">1</span> <span class="kw">for</span> c <span class="kw">in</span> chunks <span class="kw">if</span> c.source_type == <span class="st">"text"</span>)
+    tbl_ct  = <span class="fn">sum</span>(<span class="nu">1</span> <span class="kw">for</span> c <span class="kw">in</span> chunks <span class="kw">if</span> c.source_type == <span class="st">"table"</span>)
+    fig_ct  = <span class="fn">sum</span>(<span class="nu">1</span> <span class="kw">for</span> c <span class="kw">in</span> chunks <span class="kw">if</span> c.source_type == <span class="st">"figure_summary"</span>)
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"[Chunker] {len(chunks)} total  ({txt_ct} text, {tbl_ct} table, {fig_ct} figure)"</span>)
+    <span class="kw">return</span> chunks</pre>
+</div>
+</div>
+
+<!-- Step 4: Embeddings -->
+<div class="tab-panel" id="tab-c3">
+<div class="sec">
+  <div class="note note-fuchsia" style="margin-bottom:14px">
+    <span class="icon">🧠</span>
+    <div>The real project uses <strong>amazon.titan-embed-text-v2:0 (512-dim)</strong> via AWS Bedrock. The POC offers two options: local <code>sentence-transformers</code> (384-dim, no AWS needed) or the real Bedrock Titan model.</div>
+  </div>
+  <pre><span class="cm">"""
+Step 4: Generate embeddings for each chunk.
+Real project: Bedrock ingestion job calls titan-embed-text-v2:0 automatically.
+POC Option A: local sentence-transformers (no AWS needed)
+POC Option B: AWS Bedrock Titan (same as real project)
+"""</span>
+<span class="kw">from</span> typing <span class="kw">import</span> Literal
+
+EmbeddingBackend = Literal[<span class="st">"local"</span>, <span class="st">"bedrock"</span>]
+
+<span class="cm"># ── Option A: Local sentence-transformers (no AWS) ────────────────────────────</span>
+<span class="kw">def</span> <span class="fn">embed_local</span>(
+    texts:      <span class="fn">list</span>[<span class="fn">str</span>],
+    model_name: <span class="fn">str</span> = <span class="st">"all-MiniLM-L6-v2"</span>,  <span class="cm"># 384-dim</span>
+    batch_size: <span class="fn">int</span> = <span class="nu">32</span>,
+) -> <span class="fn">list</span>[<span class="fn">list</span>[<span class="fn">float</span>]]:
+    <span class="st">"""Downloads model ~80MB on first call. Fast on CPU."""</span>
+    <span class="kw">from</span> sentence_transformers <span class="kw">import</span> SentenceTransformer
+    model = SentenceTransformer(model_name)
+    embeddings = model.encode(
+        texts,
+        show_progress_bar=<span class="kc">True</span>,
+        batch_size=batch_size,
+        normalize_embeddings=<span class="kc">True</span>,  <span class="cm"># L2 normalize (matches OpenSearch l2 space_type)</span>
+    )
+    <span class="kw">return</span> embeddings.tolist()
+
+
+<span class="cm"># ── Option B: AWS Bedrock Titan (same model as genai-idp) ─────────────────────</span>
+<span class="kw">def</span> <span class="fn">embed_bedrock</span>(
+    texts:  <span class="fn">list</span>[<span class="fn">str</span>],
+    region: <span class="fn">str</span> = <span class="st">"us-east-1"</span>,
+    dim:    <span class="fn">int</span> = <span class="nu">512</span>,   <span class="cm"># KB_EMBEDDING_DIMENSION in the real project</span>
+) -> <span class="fn">list</span>[<span class="fn">list</span>[<span class="fn">float</span>]]:
+    <span class="st">"""
+    Model: amazon.titan-embed-text-v2:0
+    Same model + dimension used by Bedrock KB ingestion in genai-idp.
+    Requires AWS credentials (boto3 default chain).
+    """</span>
+    <span class="kw">import</span> json, boto3
+    client = boto3.client(<span class="st">"bedrock-runtime"</span>, region_name=region)
+    embeddings = []
+    <span class="kw">for</span> text <span class="kw">in</span> texts:
+        body = json.dumps({
+            <span class="st">"inputText"</span>:  text[:<span class="nu">8192</span>],  <span class="cm"># max 8192 tokens for Titan v2</span>
+            <span class="st">"dimensions"</span>: dim,
+            <span class="st">"normalize"</span>:  <span class="kc">True</span>,
+        })
+        resp = client.invoke_model(
+            modelId=<span class="st">"amazon.titan-embed-text-v2:0"</span>,
+            body=body, contentType=<span class="st">"application/json"</span>, accept=<span class="st">"application/json"</span>,
+        )
+        embeddings.append(json.loads(resp[<span class="st">"body"</span>].read())[<span class="st">"embedding"</span>])
+        <span class="kw">print</span>(<span class="fn">f</span><span class="st">"  embedded {len(embeddings)}/{len(texts)}"</span>, end=<span class="st">"\r"</span>)
+    <span class="kw">print</span>()
+    <span class="kw">return</span> embeddings
+
+
+<span class="cm"># ── Dispatcher ────────────────────────────────────────────────────────────────</span>
+<span class="kw">def</span> <span class="fn">generate_embeddings</span>(
+    texts:   <span class="fn">list</span>[<span class="fn">str</span>],
+    backend: EmbeddingBackend = <span class="st">"local"</span>,
+) -> <span class="fn">tuple</span>[<span class="fn">list</span>[<span class="fn">list</span>[<span class="fn">float</span>]], <span class="fn">int</span>]:
+    <span class="st">"""Returns (embeddings, dimension)."""</span>
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"[Embed] Generating {len(texts)} embeddings via '{backend}'..."</span>)
+    <span class="kw">if</span> backend == <span class="st">"bedrock"</span>:
+        embeddings = embed_bedrock(texts)
+        <span class="kw">return</span> embeddings, <span class="nu">512</span>
+    <span class="kw">else</span>:
+        embeddings = embed_local(texts)
+        <span class="kw">return</span> embeddings, <span class="fn">len</span>(embeddings[<span class="nu">0</span>]) <span class="kw">if</span> embeddings <span class="kw">else</span> <span class="nu">384</span></pre>
+</div>
+</div>
+
+<!-- Step 5-6: Index -->
+<div class="tab-panel" id="tab-c4">
+<div class="sec">
+  <div class="note note-violet" style="margin-bottom:14px">
+    <span class="icon">🗂️</span>
+    <div>Mirrors <strong>OpenSearchRepository.create_index_if_not_exists()</strong> and the indexing done by Bedrock KB's ingestion job. Same HNSW/Faiss settings (ef_construction=128, m=24, L2 distance, 512-dim).</div>
+  </div>
+  <pre><span class="cm">"""
+Step 5-6: Create OpenSearch index + bulk-index chunks with embeddings.
+Mirrors: libs/knowledge-base → OpenSearchRepository (index creation)
+         Bedrock KB ingestion job (actual chunk indexing)
+"""</span>
+<span class="kw">from</span> opensearchpy            <span class="kw">import</span> OpenSearch, RequestsHttpConnection
+<span class="kw">from</span> opensearchpy.helpers   <span class="kw">import</span> bulk
+
+<span class="kw">def</span> <span class="fn">get_opensearch_client</span>(host: <span class="fn">str</span> = <span class="st">"localhost"</span>, port: <span class="fn">int</span> = <span class="nu">9200</span>) -> OpenSearch:
+    <span class="kw">return</span> OpenSearch(
+        hosts=[{<span class="st">"host"</span>: host, <span class="st">"port"</span>: port}],
+        http_compress=<span class="kc">True</span>,
+        use_ssl=<span class="kc">False</span>,    <span class="cm"># True for AWS OpenSearch Serverless (AOSS)</span>
+        verify_certs=<span class="kc">False</span>,
+        connection_class=RequestsHttpConnection,
+    )
+
+
+<span class="kw">def</span> <span class="fn">create_index_if_not_exists</span>(
+    client:     OpenSearch,
+    index_name: <span class="fn">str</span>,
+    dim:        <span class="fn">int</span> = <span class="nu">384</span>,
+):
+    <span class="st">"""
+    Mirrors OpenSearchRepository.create_index_if_not_exists().
+    HNSW/Faiss, L2 distance — exact same settings as the real project.
+    The real project names the index by str(project_id) UUID.
+    """</span>
+    <span class="kw">if</span> client.indices.exists(index_name):
+        <span class="kw">print</span>(<span class="fn">f</span><span class="st">"[OpenSearch] Index '{index_name}' exists — skipping (SYNC mode)"</span>)
+        <span class="kw">return</span>
+
+    body = {
+        <span class="st">"settings"</span>: {<span class="st">"index"</span>: {<span class="st">"knn"</span>: <span class="kc">True</span>}},
+        <span class="st">"mappings"</span>: {
+            <span class="st">"properties"</span>: {
+                <span class="st">"vector_field"</span>: {          <span class="cm"># field name from real project</span>
+                    <span class="st">"type"</span>:       <span class="st">"knn_vector"</span>,
+                    <span class="st">"dimension"</span>:  dim,
+                    <span class="st">"space_type"</span>: <span class="st">"l2"</span>,      <span class="cm"># matches real project</span>
+                    <span class="st">"method"</span>: {
+                        <span class="st">"name"</span>:   <span class="st">"hnsw"</span>,
+                        <span class="st">"engine"</span>: <span class="st">"faiss"</span>,    <span class="cm"># matches real project</span>
+                        <span class="st">"parameters"</span>: {
+                            <span class="st">"ef_construction"</span>: <span class="nu">128</span>,  <span class="cm"># matches real project</span>
+                            <span class="st">"m"</span>:              <span class="nu">24</span>,   <span class="cm"># matches real project</span>
+                        },
+                    },
+                },
+                <span class="cm"># Metadata fields — mirrors FileMetadata .metadata.json attributes</span>
+                <span class="st">"text"</span>:        {<span class="st">"type"</span>: <span class="st">"text"</span>},
+                <span class="st">"chunk_id"</span>:    {<span class="st">"type"</span>: <span class="st">"keyword"</span>},
+                <span class="st">"project_id"</span>:  {<span class="st">"type"</span>: <span class="st">"keyword"</span>},
+                <span class="st">"upload_id"</span>:   {<span class="st">"type"</span>: <span class="st">"keyword"</span>},
+                <span class="st">"page_number"</span>: {<span class="st">"type"</span>: <span class="st">"integer"</span>},
+                <span class="st">"source_type"</span>: {<span class="st">"type"</span>: <span class="st">"keyword"</span>},  <span class="cm"># text|table|figure_summary</span>
+                <span class="st">"source_path"</span>: {<span class="st">"type"</span>: <span class="st">"keyword"</span>},
+                <span class="st">"image_summary"</span>: {<span class="st">"type"</span>: <span class="st">"boolean"</span>},
+                <span class="st">"metadata"</span>:    {<span class="st">"type"</span>: <span class="st">"object"</span>},
+            }
+        },
+    }
+    client.indices.create(index_name, body=body)
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"[OpenSearch] Created index '{index_name}' ({dim}-dim HNSW/Faiss/L2)"</span>)
+
+
+<span class="kw">def</span> <span class="fn">index_chunks</span>(
+    client:     OpenSearch,
+    index_name: <span class="fn">str</span>,
+    chunks:     <span class="fn">list</span>[TextChunk],
+    embeddings: <span class="fn">list</span>[<span class="fn">list</span>[<span class="fn">float</span>]],
+    batch_size: <span class="fn">int</span> = <span class="nu">100</span>,
+):
+    <span class="st">"""
+    Bulk-index chunks.  Each doc mirrors what Bedrock KB ingestion writes to OpenSearch.
+    Uses chunk_id as _id → re-indexing the same upload updates docs in place.
+    """</span>
+    actions = [
+        {
+            <span class="st">"_index"</span>: index_name,
+            <span class="st">"_id"</span>:    c.chunk_id,
+            <span class="st">"_source"</span>: {
+                <span class="st">"vector_field"</span>:  emb,
+                <span class="st">"text"</span>:          c.text,
+                <span class="st">"chunk_id"</span>:      c.chunk_id,
+                <span class="st">"project_id"</span>:   c.project_id,
+                <span class="st">"upload_id"</span>:    c.upload_id,
+                <span class="st">"page_number"</span>:  c.page_number,
+                <span class="st">"source_type"</span>:  c.source_type,
+                <span class="st">"source_path"</span>:  c.source_path,
+                <span class="st">"image_summary"</span>:c.image_summary,
+                <span class="st">"metadata"</span>:     c.metadata,
+            },
+        }
+        <span class="kw">for</span> c, emb <span class="kw">in</span> <span class="fn">zip</span>(chunks, embeddings)
+    ]
+    total_ok = <span class="nu">0</span>
+    <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="nu">0</span>, <span class="fn">len</span>(actions), batch_size):
+        ok, _ = bulk(client, actions[i:i+batch_size])
+        total_ok += ok
+        <span class="kw">print</span>(<span class="fn">f</span><span class="st">"  Batch {i//batch_size+1}: {ok} docs indexed"</span>)
+
+    client.indices.refresh(index_name)
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"[OpenSearch] ✓ {total_ok} chunks in '{index_name}'"</span>)</pre>
+</div>
+</div>
+
+<!-- Full Pipeline -->
+<div class="tab-panel" id="tab-c5">
+<div class="sec">
+  <pre><span class="cm">#!/usr/bin/env python3
+"""
+poc_pipeline.py — IDP All-in-One POC
+Usage: python poc_pipeline.py --input report.pdf --project-id my-project-001
+       python poc_pipeline.py --input report.pdf --bedrock   # use AWS Titan embeddings
+"""</span>
+<span class="kw">import</span> uuid, argparse, os
+<span class="cm"># paste or import all functions from Tabs 1-4 above, then:</span>
+
+<span class="kw">def</span> <span class="fn">run_pipeline</span>(
+    pdf_path:   <span class="fn">str</span>,
+    project_id: <span class="fn">str</span>  = <span class="st">"poc-project-001"</span>,
+    backend:    <span class="fn">str</span>  = <span class="st">"local"</span>,
+    os_host:    <span class="fn">str</span>  = <span class="st">"localhost"</span>,
+    os_port:    <span class="fn">int</span>  = <span class="nu">9200</span>,
+):
+    upload_id  = <span class="fn">str</span>(uuid.uuid4())[:<span class="nu">8</span>]
+    index_name = project_id.replace(<span class="st">"-"</span>,<span class="st">"_"</span>).lower()
+
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"\n{'='*60}\nIDP POC PIPELINE\nInput:   {pdf_path}\nProject: {project_id}\nUpload:  {upload_id}\nIndex:   {index_name}\n{'='*60}\n"</span>)
+
+    <span class="cm"># ── Stage 1: Extract ───────────────────────────────────────────────────────</span>
+    converter = build_docling_converter()
+    doc       = extract_document(converter, pdf_path)
+
+    <span class="cm"># ── Stage 2: Chunk ─────────────────────────────────────────────────────────</span>
+    chunks = build_chunks(doc, project_id, upload_id)
+    <span class="kw">if not</span> chunks:
+        <span class="kw">print</span>(<span class="st">"No chunks produced — check the PDF has extractable text."</span>)
+        <span class="kw">return</span>
+
+    <span class="cm"># ── Stage 3: Embed ─────────────────────────────────────────────────────────</span>
+    texts      = [c.text <span class="kw">for</span> c <span class="kw">in</span> chunks]
+    embeddings, dim = generate_embeddings(texts, backend=backend)
+
+    <span class="cm"># ── Stage 4: Index ─────────────────────────────────────────────────────────</span>
+    client = get_opensearch_client(os_host, os_port)
+    create_index_if_not_exists(client, index_name, dim=dim)
+    index_chunks(client, index_name, chunks, embeddings)
+
+    <span class="cm"># ── Stage 5: Search demo ───────────────────────────────────────────────────</span>
+    demo_query = <span class="st">"What are the main findings of this document?"</span>
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"\n[Search] Demo query: '{demo_query}'"</span>)
+
+    <span class="kw">if</span> backend == <span class="st">"bedrock"</span>:
+        q_emb = embed_bedrock([demo_query])[<span class="nu">0</span>]
+    <span class="kw">else</span>:
+        <span class="kw">from</span> sentence_transformers <span class="kw">import</span> SentenceTransformer
+        model = SentenceTransformer(<span class="st">"all-MiniLM-L6-v2"</span>)
+        q_emb = model.encode([demo_query], normalize_embeddings=<span class="kc">True</span>)[<span class="nu">0</span>].tolist()
+
+    results = hybrid_search(client, index_name, demo_query, q_emb,
+                            project_id=project_id, top_k=<span class="nu">5</span>)
+    <span class="kw">for</span> i, r <span class="kw">in</span> <span class="fn">enumerate</span>(results, <span class="nu">1</span>):
+        <span class="kw">print</span>(<span class="fn">f</span><span class="st">"  {i}. [p{r['page_number']} | {r['source_type']} | score={r['score']:.3f}]"</span>)
+        <span class="kw">print</span>(<span class="fn">f</span><span class="st">"     {r['text'][:140]}..."</span>)
+
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"\n✅ Done! {len(chunks)} chunks indexed in '{index_name}'"</span>)
+    <span class="kw">print</span>(<span class="fn">f</span><span class="st">"   Check: curl http://localhost:9200/{index_name}/_count"</span>)
+    <span class="kw">return</span> {<span class="st">"chunks"</span>: <span class="fn">len</span>(chunks), <span class="st">"index"</span>: index_name, <span class="st">"dim"</span>: dim}
+
+
+<span class="kw">if</span> __name__ == <span class="st">"__main__"</span>:
+    p = argparse.ArgumentParser()
+    p.add_argument(<span class="st">"--input"</span>,      required=<span class="kc">True</span>)
+    p.add_argument(<span class="st">"--project-id"</span>, default=<span class="st">"poc-project-001"</span>)
+    p.add_argument(<span class="st">"--bedrock"</span>,    action=<span class="st">"store_true"</span>)
+    p.add_argument(<span class="st">"--os-host"</span>,    default=<span class="st">"localhost"</span>)
+    p.add_argument(<span class="st">"--os-port"</span>,    default=<span class="nu">9200</span>, type=<span class="fn">int</span>)
+    args = p.parse_args()
+    run_pipeline(args.input, args.project_id,
+                 <span class="st">"bedrock"</span> <span class="kw">if</span> args.bedrock <span class="kw">else</span> <span class="st">"local"</span>,
+                 args.os_host, args.os_port)</pre>
+</div>
+</div>
+
+<!-- Q&A Section -->
+<div class="sec" style="background:var(--surface)">
+  <div class="sec-label">Your questions — answered</div>
+
+  <!-- Q1 -->
+  <div class="qa-card">
+    <div class="qa-head" onclick="toggleQA(this)">
+      <div class="qa-qnum" style="background:var(--cyan-bg);color:var(--cyan)">Q1</div>
+      <div class="qa-qtxt">We are creating index or syncing with existing index — how does it work?</div>
+      <div style="color:var(--muted);font-size:1rem;flex-shrink:0">▾</div>
+    </div>
+    <div class="qa-body">
+      <div class="qa-answer-head">Two separate operations: CREATE (first time) then SYNC (every upload after)</div>
+
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">These are triggered by different Kafka jobs. CREATE happens once per project. SYNC happens for every document upload.</div>
+
+      <div class="flow-diagram">
+        <div class="flow-box fb-amber">CREATE_KB job<br><span style="font-size:.65rem;font-weight:400">ingest-worker-dev topic</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-violet">OpenSearch: create index<br><span style="font-size:.65rem;font-weight:400">named by project_id UUID</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-fuchsia">Bedrock KB: create KB<br><span style="font-size:.65rem;font-weight:400">points to AOSS collection</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-green">PostgreSQL: store<br><span style="font-size:.65rem;font-weight:400">bedrock_kb_id, data_source_id</span></div>
+      </div>
+
+      <div class="flow-diagram">
+        <div class="flow-box fb-cyan">New file upload<br><span style="font-size:.65rem;font-weight:400">transformation-dev topic</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-amber">PostgreSQL lookup<br><span style="font-size:.65rem;font-weight:400">SELECT bedrock_kb_id WHERE project_id=?</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-orange">Copy files to KB S3<br><span style="font-size:.65rem;font-weight:400">{kb_bucket}/{kb_folder}/{upload_id}/</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-fuchsia">start_ingestion_job()<br><span style="font-size:.65rem;font-weight:400">Bedrock ADDS to existing index</span></div>
+      </div>
+
+      <div class="grid2" style="gap:12px;margin-top:4px">
+        <div>
+          <div style="font-size:.74rem;font-weight:700;color:var(--violet);margin-bottom:6px">CREATE (one-time per project)</div>
+          <pre style="font-size:.7rem"><span class="cm"># libs/knowledge-base → KnowledgeBaseService</span>
+
+<span class="cm"># 1. Create OpenSearch AOSS index</span>
+KBOpenSearchService.ensure_index(project_id)
+<span class="cm"># Index name = str(project_id) UUID string</span>
+<span class="cm"># HNSW/Faiss, 512-dim, L2 distance</span>
+
+<span class="cm"># 2. Create Bedrock Knowledge Base</span>
+KBBedrockService.ensure_kb(...)
+<span class="cm"># KB points to the AOSS collection</span>
+<span class="cm"># Tag: projectId=&lt;uuid&gt; (for dedup)</span>
+
+<span class="cm"># 3. Create S3 data source on the KB</span>
+KBDatasourceService.ensure_datasource(...)
+<span class="cm"># chunking_strategy = FIXED_SIZE</span>
+<span class="cm"># max_tokens = 300, overlap = 20%</span>
+
+<span class="cm"># 4. Store in PostgreSQL</span>
+db.insert(knowledge_base(
+  project_id=...,
+  bedrock_kb_id=<span class="st">"VWZKGEJ1AH"</span>,  <span class="cm"># ← 10-char</span>
+  data_source_id=...,
+  status=<span class="st">"ACTIVE"</span>
+))</pre>
+        </div>
+        <div>
+          <div style="font-size:.74rem;font-weight:700;color:var(--cyan);margin-bottom:6px">SYNC (every upload — incremental add)</div>
+          <pre style="font-size:.7rem"><span class="cm"># services/genai-idp-kb-sync → AWSService</span>
+
+<span class="cm"># 1. Lookup existing KB from Postgres (no AWS API)</span>
+config = db.get(project_id)
+<span class="cm"># config.knowledge_base_id = "VWZKGEJ1AH"</span>
+
+<span class="cm"># 2. Validate KB is ACTIVE (retries up to 10×)</span>
+bedrock_agent.get_knowledge_base(config.kb_id)
+
+<span class="cm"># 3. Copy .txt/.csv files to KB S3 bucket</span>
+s3.copy(
+  src=<span class="st">"transformation-bucket/uploads/{uid}/"</span>,
+  dst=<span class="st">"kb-bucket/{folder}/{uid}/"</span>,
+)
+
+<span class="cm"># 4. Trigger ingestion (Bedrock ADDS to index)</span>
+job = bedrock_agent.start_ingestion_job(
+  knowledgeBaseId=config.kb_id,
+  dataSourceId=config.data_source_id,
+)
+
+<span class="cm"># 5. Poll until COMPLETE (up to 30 min)</span>
+<span class="kw">while</span> job.status != <span class="st">"COMPLETE"</span>:
+  time.sleep(<span class="nu">30</span>)   <span class="cm"># poll every 30s</span>
+  job = bedrock_agent.get_ingestion_job(...)</pre>
+        </div>
+      </div>
+
+      <div class="note note-green" style="margin-top:12px">
+        <span class="icon">✅</span>
+        <div><strong>Key point:</strong> The OpenSearch index is never recreated on sync. Bedrock's ingestion job calls <code>index_document()</code> for each new chunk — it <em>adds</em> to the existing index. If you re-upload the same file with the same chunk IDs it is an <em>update</em> (upsert by <code>_id</code>). If you upload a new file, the new chunks are appended.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q2 -->
+  <div class="qa-card">
+    <div class="qa-head" onclick="toggleQA(this)">
+      <div class="qa-qnum" style="background:var(--amber-bg);color:var(--amber)">Q2</div>
+      <div class="qa-qtxt">After indexing, how does the RAG application know about the updated index? It manages the index number per workflow in a database — how does that update?</div>
+      <div style="color:var(--muted);font-size:1rem;flex-shrink:0">▾</div>
+    </div>
+    <div class="qa-body">
+      <div class="qa-answer-head">No notification needed — RAG always queries by project_id → looks up bedrock_kb_id from the same PostgreSQL table</div>
+
+      <div class="flow-diagram">
+        <div class="flow-box fb-cyan">User asks question<br><span style="font-size:.65rem;font-weight:400">on project X</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-amber">RAG: SELECT bedrock_kb_id<br><span style="font-size:.65rem;font-weight:400">FROM knowledge_base WHERE project_id=X</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-fuchsia">bedrock-agent-runtime<br><span style="font-size:.65rem;font-weight:400">.retrieve(knowledgeBaseId, question)</span></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box fb-violet">OpenSearch returns chunks<br><span style="font-size:.65rem;font-weight:400">including newly added ones</span></div>
+      </div>
+
+      <div class="grid2" style="gap:12px">
+        <div>
+          <div style="font-size:.74rem;font-weight:700;color:var(--amber);margin-bottom:6px">How the RAG app retrieves context</div>
+          <pre style="font-size:.7rem"><span class="cm"># RAG application pseudocode</span>
+
+<span class="kw">def</span> <span class="fn">answer_question</span>(project_id, question):
+  <span class="cm"># 1. Look up KB ID — same table kb-sync writes to</span>
+  kb = db.query(<span class="st">"""
+    SELECT bedrock_kb_id, status
+    FROM knowledge_base
+    WHERE project_id = %s AND status = 'ACTIVE'
+  """</span>, [project_id])
+
+  <span class="cm"># 2. Retrieve context from Bedrock KB (hybrid search)</span>
+  ctx = bedrock_runtime.retrieve(
+    knowledgeBaseId=kb.bedrock_kb_id,
+    retrievalQuery={<span class="st">"text"</span>: question},
+    retrievalConfiguration={
+      <span class="st">"vectorSearchConfiguration"</span>: {
+        <span class="st">"numberOfResults"</span>: <span class="nu">5</span>,
+        <span class="st">"overrideSearchType"</span>: <span class="st">"HYBRID"</span>,  <span class="cm"># ← hybrid!</span>
+      }
+    }
+  )
+
+  <span class="cm"># 3. Build prompt with retrieved chunks</span>
+  context = <span class="st">"\n\n"</span>.join([r[<span class="st">"content"</span>][<span class="st">"text"</span>]
+                          <span class="kw">for</span> r <span class="kw">in</span> ctx[<span class="st">"retrievalResults"</span>]])
+  <span class="kw">return</span> llm.generate(<span class="fn">f</span><span class="st">"Context:\n{context}\n\nQuestion: {question}"</span>)</pre>
+        </div>
+        <div>
+          <div style="font-size:.74rem;font-weight:700;color:var(--green);margin-bottom:6px">Why no explicit notification is needed</div>
+          <div style="font-size:.76rem;color:var(--muted)">
+            <div class="step-row">
+              <div class="step-n sn-green" style="font-size:.62rem">1</div>
+              <div class="step-body"><div class="step-title">Same KB ID, always</div><div class="step-desc">The <code>bedrock_kb_id</code> never changes for a project. Once created, all uploads go into the same Bedrock KB. RAG always uses the same ID.</div></div>
+            </div>
+            <div class="step-row">
+              <div class="step-n sn-amber" style="font-size:.62rem">2</div>
+              <div class="step-body"><div class="step-title">Eventual consistency</div><div class="step-desc">After <code>start_ingestion_job</code> completes (status=COMPLETE), new chunks are immediately searchable. Bedrock retrieval automatically returns them on the next query.</div></div>
+            </div>
+            <div class="step-row">
+              <div class="step-n sn-cyan" style="font-size:.62rem">3</div>
+              <div class="step-body"><div class="step-title">Per-upload status in PostgreSQL</div><div class="step-desc">The <code>file_uploads</code> table tracks each upload's status (INDEXED). The API can show "this file is now searchable" but the RAG doesn't check this — it just queries the KB.</div></div>
+            </div>
+            <div class="step-row">
+              <div class="step-n sn-violet" style="font-size:.62rem">4</div>
+              <div class="step-body"><div class="step-title">No index number to update</div><div class="step-desc">There is no "index version number". The OpenSearch index is a live mutable store — new chunks appear in search results immediately after ingestion.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note note-amber" style="margin-top:10px">
+        <span class="icon">🔑</span>
+        <div><strong>The database mapping is the key:</strong> <code>project_id → bedrock_kb_id</code> in PostgreSQL. The RAG application has always known this <code>bedrock_kb_id</code> since KB creation. When kb-sync adds new chunks, they automatically appear in the next retrieval call — no update to the mapping needed.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q3 -->
+  <div class="qa-card">
+    <div class="qa-head" onclick="toggleQA(this)">
+      <div class="qa-qnum" style="background:var(--violet-bg);color:var(--violet)">Q3</div>
+      <div class="qa-qtxt">What is AWS KB vs OpenSearch — are they the same? + sample code for create index and hybrid search</div>
+      <div style="color:var(--muted);font-size:1rem;flex-shrink:0">▾</div>
+    </div>
+    <div class="qa-body">
+      <div class="qa-answer-head">They are NOT the same — AWS Bedrock Knowledge Base is a managed pipeline layer ON TOP of OpenSearch Serverless (AOSS)</div>
+
+      <div class="compare-grid" style="margin-bottom:14px">
+        <div class="compare-col">
+          <div class="compare-head" style="color:var(--violet)">OpenSearch / AOSS</div>
+          <div class="compare-item">A <strong>vector database</strong> — stores embeddings + text</div>
+          <div class="compare-item">You manage: index creation, mapping, embedding, indexing, querying</div>
+          <div class="compare-item">Supports kNN (vector), BM25 (keyword), hybrid, filters</div>
+          <div class="compare-item">You call it via REST API / opensearch-py client</div>
+          <div class="compare-item">Like MySQL — you control the schema and queries</div>
+          <div class="compare-item">AOSS = serverless version (no node management)</div>
+        </div>
+        <div class="compare-col">
+          <div class="compare-head" style="color:var(--fuchsia)">AWS Bedrock Knowledge Base</div>
+          <div class="compare-item">A <strong>managed pipeline</strong> — S3 → chunk → embed → index</div>
+          <div class="compare-item">You just point it at S3 + trigger ingestion; Bedrock handles the rest</div>
+          <div class="compare-item">Uses OpenSearch Serverless <em>as its backing vector store</em></div>
+          <div class="compare-item">You query via <code>bedrock-agent-runtime.retrieve()</code></div>
+          <div class="compare-item">Like an ORM (SQLAlchemy) on top of OpenSearch</div>
+          <div class="compare-item">Also supports Pinecone, Redis as alternatives to AOSS</div>
+        </div>
+      </div>
+
+      <div class="note note-fuchsia" style="margin-bottom:14px">
+        <span class="icon">🔭</span>
+        <div><strong>Analogy:</strong> OpenSearch = MySQL database. AWS Bedrock KB = an ORM framework (like SQLAlchemy) that manages schema creation, migrations, and provides a higher-level query interface. You could bypass the ORM and talk to MySQL directly — that's exactly what this POC does (bypasses Bedrock KB and talks to OpenSearch directly).</div>
+      </div>
+
+      <div class="sec-label" style="margin-top:16px">Sample code: Create index &amp; hybrid search</div>
+      <div class="tabs" id="search-tabs" style="border-radius:var(--radius) var(--radius) 0 0;overflow:hidden;border:1px solid var(--border);border-bottom:none">
+        <div class="tab active" data-tab="s1" onclick="switchTab('search-tabs','s1')">OpenSearch Direct (this POC)</div>
+        <div class="tab" data-tab="s2" onclick="switchTab('search-tabs','s2')">AWS Bedrock KB Retrieve</div>
+        <div class="tab" data-tab="s3" onclick="switchTab('search-tabs','s3')">AOSS (Production auth)</div>
+      </div>
+
+      <div id="tab-s1" class="tab-panel active">
+        <pre style="border-radius:0 0 var(--radius) var(--radius);border:1px solid var(--border);border-top:none"><span class="cm"># ── Create index ──────────────────────────────────────────────────────────────</span>
+<span class="kw">from</span> opensearchpy <span class="kw">import</span> OpenSearch
+
+client = OpenSearch(hosts=[{<span class="st">"host"</span>:<span class="st">"localhost"</span>,<span class="st">"port"</span>:<span class="nu">9200</span>}], use_ssl=<span class="kc">False</span>)
+
+client.indices.create(<span class="st">"my_index"</span>, body={
+  <span class="st">"settings"</span>: {<span class="st">"index"</span>: {<span class="st">"knn"</span>: <span class="kc">True</span>}},
+  <span class="st">"mappings"</span>: {<span class="st">"properties"</span>: {
+    <span class="st">"vector_field"</span>: {<span class="st">"type"</span>:<span class="st">"knn_vector"</span>,<span class="st">"dimension"</span>:<span class="nu">384</span>,<span class="st">"space_type"</span>:<span class="st">"l2"</span>,
+      <span class="st">"method"</span>:{<span class="st">"name"</span>:<span class="st">"hnsw"</span>,<span class="st">"engine"</span>:<span class="st">"faiss"</span>,<span class="st">"parameters"</span>:{<span class="st">"ef_construction"</span>:<span class="nu">128</span>,<span class="st">"m"</span>:<span class="nu">24</span>}}},
+    <span class="st">"text"</span>:       {<span class="st">"type"</span>:<span class="st">"text"</span>},
+    <span class="st">"project_id"</span>: {<span class="st">"type"</span>:<span class="st">"keyword"</span>},
+    <span class="st">"source_type"</span>:{<span class="st">"type"</span>:<span class="st">"keyword"</span>},
+    <span class="st">"page_number"</span>:{<span class="st">"type"</span>:<span class="st">"integer"</span>},
+  }}
+})
+
+<span class="cm"># ── Index a document ──────────────────────────────────────────────────────────</span>
+client.index(index=<span class="st">"my_index"</span>, id=<span class="st">"chunk_001"</span>, body={
+  <span class="st">"vector_field"</span>: [<span class="nu">0.1</span>, <span class="nu">0.2</span>, ...],   <span class="cm"># 384-dim embedding</span>
+  <span class="st">"text"</span>: <span class="st">"Production volumes for Q3 2024 show..."</span>,
+  <span class="st">"project_id"</span>: <span class="st">"poc-project-001"</span>,
+  <span class="st">"source_type"</span>: <span class="st">"text"</span>,
+  <span class="st">"page_number"</span>: <span class="nu">4</span>,
+})
+
+<span class="cm"># ── Hybrid search: BM25 (keyword) + kNN (vector) combined ─────────────────────</span>
+<span class="kw">def</span> <span class="fn">hybrid_search</span>(
+    client,
+    index_name:      <span class="fn">str</span>,
+    query_text:      <span class="fn">str</span>,
+    query_embedding: <span class="fn">list</span>[<span class="fn">float</span>],
+    project_id:      <span class="fn">str</span>       = <span class="kc">None</span>,
+    top_k:           <span class="fn">int</span>       = <span class="nu">5</span>,
+    vector_boost:    <span class="fn">float</span>     = <span class="nu">1.0</span>,   <span class="cm"># weight for vector results</span>
+    keyword_boost:   <span class="fn">float</span>     = <span class="nu">0.3</span>,   <span class="cm"># weight for BM25 results</span>
+):
+    filters = [<span class="st">"term"</span>, {<span class="st">"project_id"</span>: project_id}] <span class="kw">if</span> project_id <span class="kw">else</span> []
+    response = client.search(index=index_name, body={
+        <span class="st">"size"</span>: top_k,
+        <span class="st">"query"</span>: {
+            <span class="st">"bool"</span>: {
+                <span class="st">"should"</span>: [
+                    <span class="cm"># kNN: find semantically similar chunks</span>
+                    {<span class="st">"knn"</span>: {<span class="st">"vector_field"</span>: {
+                        <span class="st">"vector"</span>: query_embedding,
+                        <span class="st">"k"</span>: top_k,
+                        <span class="st">"boost"</span>: vector_boost,
+                    }}},
+                    <span class="cm"># BM25: find chunks with exact/near keyword matches</span>
+                    {<span class="st">"match"</span>: {<span class="st">"text"</span>: {
+                        <span class="st">"query"</span>: query_text,
+                        <span class="st">"boost"</span>: keyword_boost,
+                    }}},
+                ],
+                <span class="st">"minimum_should_match"</span>: <span class="nu">1</span>,
+                <span class="st">"filter"</span>: [{<span class="st">"term"</span>: {<span class="st">"project_id"</span>: project_id}}] <span class="kw">if</span> project_id <span class="kw">else</span> [],
+            }
+        },
+        <span class="st">"_source"</span>: {<span class="st">"excludes"</span>: [<span class="st">"vector_field"</span>]},  <span class="cm"># don't return the big vector</span>
+    })
+    <span class="kw">return</span> [{
+        <span class="st">"id"</span>:          hit[<span class="st">"_id"</span>],
+        <span class="st">"score"</span>:       hit[<span class="st">"_score"</span>],
+        <span class="st">"text"</span>:        hit[<span class="st">"_source"</span>][<span class="st">"text"</span>],
+        <span class="st">"page_number"</span>: hit[<span class="st">"_source"</span>][<span class="st">"page_number"</span>],
+        <span class="st">"source_type"</span>: hit[<span class="st">"_source"</span>][<span class="st">"source_type"</span>],
+    } <span class="kw">for</span> hit <span class="kw">in</span> response[<span class="st">"hits"</span>][<span class="st">"hits"</span>]]
+
+<span class="cm"># ── Example queries ───────────────────────────────────────────────────────────</span>
+<span class="cm"># 1. Semantic only (pure kNN)</span>
+resp = client.search(index=<span class="st">"my_index"</span>, body={
+    <span class="st">"size"</span>: <span class="nu">5</span>,
+    <span class="st">"query"</span>: {<span class="st">"knn"</span>: {<span class="st">"vector_field"</span>: {<span class="st">"vector"</span>: query_embedding, <span class="st">"k"</span>: <span class="nu">5</span>}}},
+})
+
+<span class="cm"># 2. Keyword only (BM25)</span>
+resp = client.search(index=<span class="st">"my_index"</span>, body={
+    <span class="st">"size"</span>: <span class="nu">5</span>,
+    <span class="st">"query"</span>: {<span class="st">"match"</span>: {<span class="st">"text"</span>: {<span class="st">"query"</span>: <span class="st">"oil production Q3 2024"</span>}}},
+})
+
+<span class="cm"># 3. Filtered by project + page range</span>
+resp = client.search(index=<span class="st">"my_index"</span>, body={
+    <span class="st">"size"</span>: <span class="nu">5</span>,
+    <span class="st">"query"</span>: {<span class="st">"bool"</span>: {
+        <span class="st">"must"</span>:   [{<span class="st">"knn"</span>: {<span class="st">"vector_field"</span>: {<span class="st">"vector"</span>: query_embedding, <span class="st">"k"</span>:<span class="nu">5</span>}}}],
+        <span class="st">"filter"</span>: [{<span class="st">"term"</span>: {<span class="st">"source_type"</span>: <span class="st">"table"</span>}},   <span class="cm"># only table chunks</span>
+                   {<span class="st">"range"</span>: {<span class="st">"page_number"</span>: {<span class="st">"gte"</span>:<span class="nu">1</span>, <span class="st">"lte"</span>:<span class="nu">10</span>}}}],
+    }},
+})</pre>
+      </div>
+
+      <div id="tab-s2" class="tab-panel">
+        <pre style="border-radius:0 0 var(--radius) var(--radius);border:1px solid var(--border);border-top:none"><span class="cm"># ── AWS Bedrock KB Retrieval (what genai-idp RAG would use) ───────────────────</span>
+<span class="kw">import</span> boto3
+
+runtime = boto3.client(<span class="st">"bedrock-agent-runtime"</span>, region_name=<span class="st">"us-east-1"</span>)
+
+<span class="cm"># ── Basic retrieval (vector search) ──────────────────────────────────────────</span>
+response = runtime.retrieve(
+    knowledgeBaseId=<span class="st">"VWZKGEJ1AH"</span>,   <span class="cm"># from knowledge_base table in Postgres</span>
+    retrievalQuery={<span class="st">"text"</span>: <span class="st">"What is the Q3 production volume?"</span>},
+    retrievalConfiguration={
+        <span class="st">"vectorSearchConfiguration"</span>: {
+            <span class="st">"numberOfResults"</span>: <span class="nu">5</span>,
+        }
+    }
+)
+<span class="kw">for</span> r <span class="kw">in</span> response[<span class="st">"retrievalResults"</span>]:
+    <span class="kw">print</span>(r[<span class="st">"content"</span>][<span class="st">"text"</span>])
+    <span class="kw">print</span>(<span class="st">"score:"</span>, r[<span class="st">"score"</span>])
+    <span class="kw">print</span>(<span class="st">"source:"</span>, r[<span class="st">"location"</span>][<span class="st">"s3Location"</span>][<span class="st">"uri"</span>])
+
+<span class="cm"># ── Hybrid retrieval (vector + keyword, same as OpenSearch hybrid) ────────────</span>
+response = runtime.retrieve(
+    knowledgeBaseId=<span class="st">"VWZKGEJ1AH"</span>,
+    retrievalQuery={<span class="st">"text"</span>: <span class="st">"What is the Q3 production volume?"</span>},
+    retrievalConfiguration={
+        <span class="st">"vectorSearchConfiguration"</span>: {
+            <span class="st">"numberOfResults"</span>: <span class="nu">5</span>,
+            <span class="st">"overrideSearchType"</span>: <span class="st">"HYBRID"</span>,  <span class="cm"># ← enables BM25 + kNN combined</span>
+        }
+    }
+)
+
+<span class="cm"># ── With metadata filter (filter by project_id metadata attribute) ────────────</span>
+response = runtime.retrieve(
+    knowledgeBaseId=<span class="st">"VWZKGEJ1AH"</span>,
+    retrievalQuery={<span class="st">"text"</span>: <span class="st">"production volumes"</span>},
+    retrievalConfiguration={
+        <span class="st">"vectorSearchConfiguration"</span>: {
+            <span class="st">"numberOfResults"</span>: <span class="nu">5</span>,
+            <span class="st">"overrideSearchType"</span>: <span class="st">"HYBRID"</span>,
+            <span class="st">"filter"</span>: {
+                <span class="st">"andAll"</span>: [
+                    <span class="cm"># These are the metadataAttributes from .metadata.json files</span>
+                    {<span class="st">"equals"</span>: {<span class="st">"key"</span>:<span class="st">"source_type"</span>, <span class="st">"value"</span>:<span class="st">"text"</span>}},
+                    {<span class="st">"equals"</span>: {<span class="st">"key"</span>:<span class="st">"document_type"</span>, <span class="st">"value"</span>:<span class="st">"production_report"</span>}},
+                ]
+            }
+        }
+    }
+)
+
+<span class="cm"># ── Retrieve AND Generate (full RAG) ──────────────────────────────────────────</span>
+runtimeRAG = boto3.client(<span class="st">"bedrock-agent-runtime"</span>, region_name=<span class="st">"us-east-1"</span>)
+response = runtimeRAG.retrieve_and_generate(
+    input={<span class="st">"text"</span>: <span class="st">"Summarise Q3 production volumes"</span>},
+    retrieveAndGenerateConfiguration={
+        <span class="st">"type"</span>: <span class="st">"KNOWLEDGE_BASE"</span>,
+        <span class="st">"knowledgeBaseConfiguration"</span>: {
+            <span class="st">"knowledgeBaseId"</span>: <span class="st">"VWZKGEJ1AH"</span>,
+            <span class="st">"modelArn"</span>: <span class="st">"arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"</span>,
+        }
+    }
+)
+<span class="kw">print</span>(response[<span class="st">"output"</span>][<span class="st">"text"</span>])   <span class="cm"># ← LLM-generated answer with KB context</span></pre>
+      </div>
+
+      <div id="tab-s3" class="tab-panel">
+        <pre style="border-radius:0 0 var(--radius) var(--radius);border:1px solid var(--border);border-top:none"><span class="cm"># ── Production: AWS OpenSearch Serverless (AOSS) with SigV4 auth ─────────────
+# Mirrors libs/knowledge-base/src/idp_kb/connectors/opensearch.py</span>
+<span class="kw">import</span> boto3
+<span class="kw">from</span> opensearchpy            <span class="kw">import</span> OpenSearch, RequestsHttpConnection, AWSV4SignerAuth
+<span class="kw">from</span> requests_aws4auth       <span class="kw">import</span> AWS4Auth
+
+session     = boto3.Session()
+credentials = session.get_credentials().get_frozen_credentials()
+
+auth = AWSV4SignerAuth(credentials, region=<span class="st">"us-east-1"</span>, service=<span class="st">"aoss"</span>)
+<span class="cm"># Note: service="aoss" for Serverless (not "es" for managed OpenSearch)</span>
+
+aoss_client = OpenSearch(
+    hosts=[{<span class="st">"host"</span>: <span class="st">"&lt;collection-id&gt;.us-east-1.aoss.amazonaws.com"</span>, <span class="st">"port"</span>: <span class="nu">443</span>}],
+    http_auth=auth,
+    use_ssl=<span class="kc">True</span>,
+    verify_certs=<span class="kc">True</span>,
+    connection_class=RequestsHttpConnection,
+    timeout=<span class="nu">300</span>,
+)
+
+<span class="cm"># Index name = str(project_id)  ← from the real project</span>
+<span class="cm"># e.g.  "123e4567-e89b-12d3-a456-426614174000"</span>
+aoss_client.index(
+    index=<span class="st">"123e4567-e89b-12d3-a456-426614174000"</span>,
+    id=<span class="st">"chunk_001"</span>,
+    body={<span class="st">"vector_field"</span>: [...], <span class="st">"text"</span>: <span class="st">"..."</span>},
+)
+
+<span class="cm"># Check collection exists</span>
+aoss = boto3.client(<span class="st">"opensearchserverless"</span>, region_name=<span class="st">"us-east-1"</span>)
+collections = aoss.list_collections(collectionFilters={<span class="st">"name"</span>: <span class="st">"bedrock-knowledge-base"</span>})
+<span class="kw">print</span>(collections[<span class="st">"collectionSummaries"</span>])</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="sec">
+  <div class="sec-label">Key takeaways</div>
+  <div class="grid3">
+    <div class="card"><div class="card-head"><span class="pill p-cyan">Docling</span>Model download</div>
+      <div class="card-body" style="font-size:.76rem;color:var(--muted)">Models auto-download to <code>~/.cache/docling/</code> (~750MB) on first run. The real project bakes them into Docker at build time. Enable <code>do_ocr=True</code> + <code>TableFormerMode.ACCURATE</code> to match the project's extraction quality.</div></div>
+    <div class="card"><div class="card-head"><span class="pill p-amber">Chunking</span>Config mirrors Bedrock</div>
+      <div class="card-body" style="font-size:.76rem;color:var(--muted)">Bedrock KB uses <strong>FIXED_SIZE</strong>, 300 max_tokens, 20% overlap. The Transformer service does NOT chunk — it just copies .txt/.csv files. Bedrock's ingestion job chunks server-side. This POC makes that visible by implementing it in Python.</div></div>
+    <div class="card"><div class="card-head"><span class="pill p-violet">Index</span>project_id = index name</div>
+      <div class="card-body" style="font-size:.76rem;color:var(--muted)">The real project names the OpenSearch index by the project's UUID string. One KB per project. The KB ID is stored in PostgreSQL and looked up by both kb-sync AND the RAG application — no notification flow needed.</div></div>
+  </div>
+</div>
+
+<script>
+function toggleTheme(){
+  const r=document.documentElement,c=r.getAttribute('data-theme');
+  const pref=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+  r.setAttribute('data-theme',!c?(pref==='dark'?'light':'dark'):(c==='dark'?'light':'dark'));
+}
+function switchTab(groupId,tabId){
+  const grp=document.getElementById(groupId);
+  grp.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId));
+  // find sibling tab-panels
+  const panels=document.querySelectorAll(`#tab-${tabId.replace('c','c')}, #tab-${tabId.replace('s','s')}`);
+  // Actually use a simpler approach: find all panels in the same sibling context
+  const container=grp.nextElementSibling;
+  function showPanels(root,id){
+    root.querySelectorAll('.tab-panel').forEach(p=>{
+      if(p.id===`tab-${id}`) p.classList.add('active');
+      else p.classList.remove('active');
+    });
+  }
+  // For code tabs group, panels are siblings of the tabs div
+  // For search tabs, panels are inside the qa-body
+  const parentForSearch=grp.closest('.qa-body');
+  if(parentForSearch){showPanels(parentForSearch,tabId);}
+  else{
+    // walk next siblings
+    let sib=grp.nextElementSibling;
+    while(sib){
+      if(sib.classList.contains('tab-panel')){
+        sib.classList.toggle('active',sib.id===`tab-${tabId}`);
+      }
+      sib=sib.nextElementSibling;
+    }
+  }
+}
+function toggleQA(head){
+  const body=head.nextElementSibling;
+  const arrow=head.querySelector('div:last-child');
+  const open=body.style.display==='block';
+  body.style.display=open?'none':'block';
+  arrow.textContent=open?'▾':'▴';
+}
+// Open all Q&A by default
+document.querySelectorAll('.qa-body').forEach(b=>b.style.display='block');
+document.querySelectorAll('.qa-head div:last-child').forEach(a=>a.textContent='▴');
+</script>
+</body>
+</html>
